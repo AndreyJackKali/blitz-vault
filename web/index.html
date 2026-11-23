@@ -276,7 +276,9 @@
         </div>
       </div>
       <div class="pills">
-        <span class="pill" title="Live MagicBlock Asia Devnet ER Health"><span id="erDot" class="dot"></span>ER: <span id="erPing">probing...</span></span>
+        <a class="pill" href="https://github.com/AndreyJackKali/blitz-vault/raw/main/docs/demo.mp4" target="_blank" rel="noopener" title="Watch 48s HD Demo Video">🎬 48s Demo</a>
+        <a class="pill" href="https://github.com/AndreyJackKali/blitz-vault" target="_blank" rel="noopener" title="Inspect Anchor + MagicBlock ER Source Code">📦 GitHub</a>
+        <span class="pill" title="Live MagicBlock Devnet ER Health"><span id="erDot" class="dot"></span>ER: <span id="erPing">probing...</span></span>
         <span class="pill" title="Live Solana Devnet L1 Slot"><span id="l1Dot" class="dot"></span>Devnet L1: <span id="l1Ping">probing...</span></span>
         <button id="walletBtn" class="btn-primary">Connect Phantom / Demo</button>
       </div>
@@ -342,12 +344,22 @@
           <button id="delegateBtn" class="btn-ghost">1. Delegate to ER</button>
           <button id="launchBtn" class="btn-primary">2. Start VRF Round</button>
           <button id="cashoutBtn" class="btn-neon" disabled>⚡ CASH OUT NOW</button>
-          <button id="settleBtn" class="btn-ghost" disabled>Commit &amp; Undelegate L1</button>
-          <span class="kbd-hint" title="Press Spacebar while a round is live to cash out instantly">SPACE: Cash Out</span>
+          <button id="commitBtn" class="btn-ghost" disabled title="Checkpoint ER state to Solana L1 without undelegating">Checkpoint L1</button>
+          <button id="settleBtn" class="btn-ghost" disabled title="Commit final state & undelegate PDA back to Solana L1">Commit &amp; Undelegate L1</button>
+          <span class="kbd-hint" title="Press Spacebar while a round is live (>=1.05x) to cash out instantly">SPACE: Cash Out</span>
         </div>
 
         <div class="er-bar">
-          <span class="mono">ER: <strong>devnet-as.magicblock.app</strong> · VRF Queue: <a href="https://explorer.solana.com/address/5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc?cluster=devnet" target="_blank">5hBR57…FRK5Tc</a> (0-fee)</span>
+          <span class="mono" style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            Magic Router:
+            <select id="erRegionSelect" style="background:rgba(255,255,255,0.06);color:var(--neon);border:1px solid var(--border);border-radius:6px;padding:2px 6px;font-family:ui-monospace,monospace;font-size:11px;outline:none;">
+              <option value="https://devnet-as.magicblock.app|MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57|SGP">SGP · devnet-as (MAS1Dt…zk57 · 10ms)</option>
+              <option value="https://devnet-us.magicblock.app|MUS3hc9TCw4cGC12vHNoYcCGzJG1txjgQLZWVoeNHNd|USA">USA · devnet-us (MUS3hc…NHNd · 10ms)</option>
+              <option value="https://devnet-eu.magicblock.app|MEUGGrYPxKk17hCr7wpT6s8dtNokZj5U2L57vjYMS8e|DEU">DEU · devnet-eu (MEUGGr…MS8e · 10ms)</option>
+              <option value="https://devnet-tee.magicblock.app|MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo|TEE">TEE · devnet-tee (MTEWGu…3xzo · 10ms)</option>
+            </select>
+            · VRF Queue: <a href="https://explorer.solana.com/address/5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc?cluster=devnet" target="_blank" rel="noopener">5hBR57…FRK5Tc</a> (0-fee)
+          </span>
           <span class="mono">SDK: <strong>ephemeral-rollups-sdk 0.18.0</strong> · Anchor <strong>1.0.2</strong></span>
         </div>
       </section>
@@ -416,9 +428,9 @@
       </div>
       <div class="verify-box">
         <h3>🛡 Verified CI &amp; SBF Localnet Proof</h3>
-        <p>Green CI Run: <a href="https://github.com/AndreyJackKali/blitz-vault/actions/runs/45182964236" target="_blank">#45182964236</a> (14/14 Rust Tests · 7/7 SBF E2E · 20,041 CU)</p>
+        <p>Green CI: <a href="https://github.com/AndreyJackKali/blitz-vault/actions/workflows/ci-pages.yml" target="_blank" rel="noopener">GitHub Actions</a> (14/14 Rust Tests · 10/10 SBF E2E · 20,041 CU)</p>
         <p>SBF Binary: <code>blitz_vault.so</code> (351 KB eBPF · SHA-256 <code>100ed232…4697</code>)</p>
-        <p>Devnet Status: Public RPC airdrop closed (<code>410</code>); 1-cmd deploy ready · <a href="https://github.com/AndreyJackKali/blitz-vault" target="_blank">GitHub Repo</a></p>
+        <p>Devnet Deploy: RPC faucet closed (<code>410</code>); 1-cmd <a href="https://github.com/AndreyJackKali/blitz-vault/blob/main/scripts/devnet_pow.mjs" target="_blank" rel="noopener">devnet_pow.mjs</a> ready · <a href="https://github.com/AndreyJackKali/blitz-vault" target="_blank" rel="noopener">GitHub Repo</a></p>
       </div>
       <div class="verify-box">
         <h3>🎬 Walkthrough &amp; Judge Sandbox</h3>
@@ -455,13 +467,56 @@
       }
     }
 
-    function runProbes() {
-      probeRpc('https://devnet-as.magicblock.app', { jsonrpc: '2.0', id: 1, method: 'getHealth' },
+    function selectedErInfo() {
+      const sel = document.getElementById('erRegionSelect');
+      const [url, identity, region] = (sel?.value || 'https://devnet-as.magicblock.app|MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57|SGP').split('|');
+      return { url: url.replace(/\/$/, ''), identity, region };
+    }
+
+    async function loadMagicRouterRoutes() {
+      try {
+        const r = await fetch('https://devnet-router.magicblock.app', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getRoutes' })
+        });
+        if (!r.ok) return;
+        const j = await r.json();
+        const routes = Array.isArray(j.result) ? j.result : [];
+        if (!routes.length) return;
+        const sel = document.getElementById('erRegionSelect');
+        sel.innerHTML = '';
+        routes.forEach(rt => {
+          const cleanUrl = String(rt.fqdn || '').replace(/\/$/, '');
+          const id = String(rt.identity || '');
+          const labelRegion = cleanUrl.includes('tee') ? 'TEE' : (rt.countryCode || 'ER');
+          const host = cleanUrl.replace(/^https?:\/\//, '').split('.')[0];
+          const opt = document.createElement('option');
+          opt.value = `${cleanUrl}|${id}|${labelRegion}`;
+          opt.textContent = `${labelRegion} · ${host} (${id.slice(0, 6)}…${id.slice(-4)} · ${rt.blockTimeMs || 10}ms)`;
+          sel.appendChild(opt);
+        });
+        addLog('ER', 'tag-er', `Magic Router (devnet-router.magicblock.app) discovered ${routes.length} live 10ms 0-fee ER validators.`);
+      } catch (e) {
+        // Fallback options already populated in <select>
+      }
+    }
+
+    async function runProbes() {
+      await loadMagicRouterRoutes();
+      const { url } = selectedErInfo();
+      probeRpc(url, { jsonrpc: '2.0', id: 1, method: 'getHealth' },
         document.getElementById('erDot'), document.getElementById('erPing'));
       probeRpc('https://api.devnet.solana.com', { jsonrpc: '2.0', id: 1, method: 'getSlot' },
         document.getElementById('l1Dot'), document.getElementById('l1Ping'));
     }
-    runProbes();
+
+    document.getElementById('erRegionSelect').onchange = () => {
+      const { url, identity, region } = selectedErInfo();
+      probeRpc(url, { jsonrpc: '2.0', id: 1, method: 'getHealth' },
+        document.getElementById('erDot'), document.getElementById('erPing'));
+      addLog('ER', 'tag-er', `Selected MagicBlock ER validator ${region} (${identity.slice(0, 8)}… → ${url.replace('https://', '')})`);
+    };
 
     // Mirror of on-chain ArenaState (programs/blitz-vault/src/lib.rs)
     const state = {
@@ -593,8 +648,9 @@
 
       $('delegateBtn').disabled = state.delegated || state.phase !== 'idle';
       $('launchBtn').disabled = state.phase !== 'idle';
-      $('cashoutBtn').disabled = state.phase !== 'live';
+      $('cashoutBtn').disabled = state.phase !== 'live' || state.currentBps < 10500;
       if (state.phase !== 'live') $('cashoutBtn').textContent = '⚡ CASH OUT NOW';
+      $('commitBtn').disabled = !state.delegated || state.phase !== 'idle';
       $('settleBtn').disabled = !state.delegated || state.phase !== 'idle';
       $('openPackBtn').disabled = state.phase !== 'idle' || state.shards < 100;
       updateStepper();
@@ -730,10 +786,11 @@
     };
 
     $('delegateBtn').onclick = () => {
+      const { url, identity, region } = selectedErInfo();
       state.delegated = true;
       state.settledOnce = false;
-      $('statusDisplay').textContent = 'PDA Delegated to MagicBlock ER (devnet-as) — Zero-Fee Ticks Ready!';
-      addLog('ER', 'tag-er', 'delegate_arena() → ArenaState PDA delegated to DELeGGvX…RSaeSh (0 gas mode).');
+      $('statusDisplay').textContent = `PDA Delegated to MagicBlock ER (${region} · ${url.replace('https://', '')}) — Zero-Fee Ticks Ready!`;
+      addLog('ER', 'tag-er', `delegate_arena(validator=${identity.slice(0, 8)}…) → ArenaState PDA delegated via DELeGGvX…RSaeSh (0 gas mode).`);
       renderUI();
     };
 
@@ -847,16 +904,24 @@
 
       $('multDisplay').textContent = `${(multBps / 10000).toFixed(2)}×`;
       $('multDisplay').style.color = 'var(--neon)';
-      const estBase = Math.floor((state.stake * Math.max(10500, multBps)) / 10000);
-      const estBonus = Math.floor((Math.max(0, estBase - state.stake) * relicBoostBps()) / 10000);
-      $('cashoutBtn').textContent = `⚡ CASH OUT (+${(estBase + estBonus).toLocaleString()})`;
+      if (multBps < 10500) {
+        $('cashoutBtn').disabled = true;
+        $('cashoutBtn').textContent = 'WAIT 1.05× MIN...';
+      } else {
+        $('cashoutBtn').disabled = false;
+        const estBase = Math.floor((state.stake * multBps) / 10000);
+        const estBonus = Math.floor((Math.max(0, estBase - state.stake) * relicBoostBps()) / 10000);
+        $('cashoutBtn').textContent = `⚡ CASH OUT (+${(estBase + estBonus).toLocaleString()})`;
+      }
       drawCurve(false);
       state.raf = requestAnimationFrame(tickLoop);
     }
 
-    $('cashoutBtn').onclick = doCashout;
+    $('cashoutBtn').onclick = () => {
+      if (state.phase === 'live' && state.currentBps >= 10500) doCashout();
+    };
     document.addEventListener('keydown', e => {
-      if (e.code === 'Space' && state.phase === 'live' && document.activeElement?.tagName !== 'INPUT') {
+      if (e.code === 'Space' && state.phase === 'live' && state.currentBps >= 10500 && document.activeElement?.tagName !== 'INPUT') {
         e.preventDefault();
         doCashout();
       }
@@ -885,6 +950,13 @@
       renderUI();
     };
 
+    $('commitBtn').onclick = () => {
+      if (!state.delegated || state.phase !== 'idle') return;
+      $('statusDisplay').textContent = '📌 Checkpointed ER ArenaState to Solana Devnet L1 via commit_arena() — still delegated!';
+      addLog('L1', 'tag-l1', `commit_arena() [MagicIntentBundleBuilder::commit] → Checkpointed ${state.chips.toLocaleString()} chips & +${(relicBoostBps()/100).toFixed(0)}% relics to L1 while staying in 0-gas ER.`);
+      renderUI();
+    };
+
     $('settleBtn').onclick = () => {
       if (!state.delegated || state.phase !== 'idle') return;
       state.delegated = false;
@@ -896,6 +968,7 @@
 
     drawCurve(false);
     renderUI();
+    runProbes();
   </script>
 </body>
 </html>

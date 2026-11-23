@@ -285,7 +285,69 @@ async function main() {
     "start_round with invalid oracle queue"
   );
 
-  console.log("=== ALL 7 ON-CHAIN SBF E2E ASSERTIONS PASSED ===");
+  // 8. Verify start_round rejects stake exceeding chips balance (BlitzError::InsufficientChips = 6003 = 0x1773)
+  const overStakeIx = new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [
+      { pubkey: player.publicKey, isSigner: true, isWritable: true },
+      { pubkey: arenaPda, isSigner: false, isWritable: true },
+      { pubkey: DEFAULT_EPHEMERAL_QUEUE, isSigner: false, isWritable: true },
+      { pubkey: programIdentity, isSigner: false, isWritable: false },
+      { pubkey: vrfProgramId, isSigner: false, isWritable: false },
+      { pubkey: slotHashesSysvar, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ],
+    data: Buffer.concat([anchorDisc("start_round"), u64Le(25_000), Buffer.from([7])]),
+  });
+  await expectError(
+    connection,
+    player,
+    overStakeIx,
+    ["0x1773", "6003", "InsufficientChips"],
+    "start_round exceeding chips balance"
+  );
+
+  // 9. Verify open_relic_pack rejects unauthorized oracle queue (BlitzError::InvalidOracleQueue = 6007 = 0x1777)
+  const badRelicQueueIx = new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [
+      { pubkey: player.publicKey, isSigner: true, isWritable: true },
+      { pubkey: arenaPda, isSigner: false, isWritable: true },
+      { pubkey: fakeQueue, isSigner: false, isWritable: true },
+      { pubkey: programIdentity, isSigner: false, isWritable: false },
+      { pubkey: vrfProgramId, isSigner: false, isWritable: false },
+      { pubkey: slotHashesSysvar, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ],
+    data: Buffer.concat([anchorDisc("open_relic_pack"), Buffer.from([9])]),
+  });
+  await expectError(
+    connection,
+    player,
+    badRelicQueueIx,
+    ["0x1777", "6007", "InvalidOracleQueue"],
+    "open_relic_pack with invalid oracle queue"
+  );
+
+  // 10. Verify #[vrf_callback] rejects spoofed non-oracle callback_round_vrf signer on-chain
+  const fakeRandomness = Buffer.alloc(32, 0x42);
+  const spoofCallbackIx = new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [
+      { pubkey: intruder.publicKey, isSigner: true, isWritable: false },
+      { pubkey: arenaPda, isSigner: false, isWritable: true },
+    ],
+    data: Buffer.concat([anchorDisc("callback_round_vrf"), fakeRandomness, u64Le(1)]),
+  });
+  await expectError(
+    connection,
+    intruder,
+    spoofCallbackIx,
+    ["0x7dc", "2012", "ConstraintAddress", "0xbc2", "3010", "AccountNotSigner", "0x1778", "6008"],
+    "spoofed callback_round_vrf by non-oracle signer"
+  );
+
+  console.log("=== ALL 10 ON-CHAIN SBF E2E ASSERTIONS PASSED ===");
 }
 
 main().catch((err) => {
