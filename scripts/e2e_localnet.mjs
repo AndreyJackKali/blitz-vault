@@ -86,14 +86,30 @@ function parseArenaState(data) {
 async function expectError(connection, payer, ix, expectedSubstrings, label) {
   const { blockhash } = await connection.getLatestBlockhash("confirmed");
   const tx = new Transaction({ recentBlockhash: blockhash, feePayer: payer.publicKey }).add(ix);
-  const sim = await connection.simulateTransaction(tx, [payer]);
-  assert.ok(sim.value.err, `${label}: expected on-chain SBF error, but simulation succeeded`);
-  const logs = sim.value.logs || [];
-  const combined = JSON.stringify(sim.value.err) + " " + logs.join("\n");
+  tx.sign(payer);
+  const res = await fetch(RPC_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "simulateTransaction",
+      params: [
+        tx.serialize().toString("base64"),
+        { encoding: "base64", commitment: "confirmed", sigVerify: true },
+      ],
+    }),
+  });
+  const json = await res.json();
+  assert.ok(!json.error, `${label}: RPC error ${JSON.stringify(json.error)}`);
+  const val = json.result?.value;
+  assert.ok(val && val.err, `${label}: expected on-chain SBF error, but simulation succeeded`);
+  const logs = val.logs || [];
+  const combined = JSON.stringify(val.err) + " " + logs.join("\n");
   const matched = expectedSubstrings.some((s) => combined.includes(s));
   assert.ok(
     matched,
-    `${label}: expected one of ${JSON.stringify(expectedSubstrings)}, got err=${JSON.stringify(sim.value.err)} logs=${JSON.stringify(logs)}`
+    `${label}: expected one of ${JSON.stringify(expectedSubstrings)}, got err=${JSON.stringify(val.err)} logs=${JSON.stringify(logs)}`
   );
   console.log(`✅ [PASS] ${label} rejected cleanly on-chain (${expectedSubstrings[0]})`);
   const errLine = logs.find((l) => l.includes("Error") || l.includes("already in use") || l.includes("failed"));
