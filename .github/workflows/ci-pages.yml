@@ -84,7 +84,7 @@ jobs:
 
       - name: Run On-Chain SBF E2E Test on solana-test-validator
         run: |
-          npm install --no-save @solana/web3.js
+          npm install --no-save @solana/web3.js@1.95.8
           solana-test-validator \
             --reset \
             --quiet \

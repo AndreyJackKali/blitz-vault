@@ -83,18 +83,19 @@ function parseArenaState(data) {
   };
 }
 
-async function expectCustomError(connection, payer, ix, expectedHexCode, label) {
+async function expectError(connection, payer, ix, expectedSubstrings, label) {
   const tx = new Transaction().add(ix);
   try {
     await sendAndConfirmTransaction(connection, tx, [payer], { commitment: "confirmed" });
-    assert.fail(`${label}: expected transaction to fail with ${expectedHexCode}, but succeeded`);
+    assert.fail(`${label}: expected transaction to fail, but succeeded`);
   } catch (err) {
     const msg = String(err?.message || err) + " " + JSON.stringify(err?.logs || []);
+    const matched = expectedSubstrings.some((s) => msg.includes(s));
     assert.ok(
-      msg.includes(expectedHexCode),
-      `${label}: expected custom error ${expectedHexCode}, got: ${msg}`
+      matched,
+      `${label}: expected one of ${JSON.stringify(expectedSubstrings)}, got: ${msg}`
     );
-    console.log(`✅ [PASS] ${label} rejected cleanly on-chain (${expectedHexCode})`);
+    console.log(`✅ [PASS] ${label} rejected cleanly on-chain (${expectedSubstrings[0]})`);
   }
 }
 
@@ -109,9 +110,14 @@ async function main() {
   console.log(`✅ Program loaded: ${PROGRAM_ID.toBase58()} (executable=${progInfo.executable})`);
 
   const player = Keypair.generate();
-  const airdropSig = await connection.requestAirdrop(player.publicKey, 5_000_000_000);
-  await connection.confirmTransaction(airdropSig, "confirmed");
-  console.log(`✅ Funded test player: ${player.publicKey.toBase58()} (airdrop sig: ${airdropSig})`);
+  const intruder = Keypair.generate();
+  for (const kp of [player, intruder]) {
+    const sig = await connection.requestAirdrop(kp.publicKey, 5_000_000_000);
+    const bh = await connection.getLatestBlockhash("confirmed");
+    await connection.confirmTransaction({ signature: sig, ...bh }, "confirmed");
+  }
+  console.log(`✅ Funded test player  : ${player.publicKey.toBase58()} (5 SOL localnet)`);
+  console.log(`✅ Funded test intruder: ${intruder.publicKey.toBase58()} (5 SOL localnet)`);
 
   const [arenaPda, canonicalBump] = PublicKey.findProgramAddressSync(
     [ARENA_SEED, player.publicKey.toBuffer()],
@@ -173,7 +179,33 @@ async function main() {
     `✅ [PASS] On-chain ArenaState verified: ${parsed.byteLength} bytes, chips=${parsed.chips}, shards=${parsed.shards}, phase=Idle`
   );
 
-  // 2. Verify cashout_round fails closed when phase == Idle (BlitzError::RoundNotLive = 6005 = 0x1775)
+  // 2. Duplicate initialize_arena must fail (account already in use)
+  await expectError(
+    connection,
+    player,
+    initIx,
+    ["already in use", "0x0"],
+    "duplicate initialize_arena"
+  );
+
+  // 3. Unauthorized signer calling cashout_round on player's PDA must fail (ConstraintSeeds 0x7d6 or Unauthorized 0x1770)
+  const unauthIx = new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [
+      { pubkey: intruder.publicKey, isSigner: true, isWritable: true },
+      { pubkey: arenaPda, isSigner: false, isWritable: true },
+    ],
+    data: Buffer.concat([anchorDisc("cashout_round"), u32Le(20_000)]),
+  });
+  await expectError(
+    connection,
+    intruder,
+    unauthIx,
+    ["0x7d6", "ConstraintSeeds", "0x1770"],
+    "unauthorized intruder cashout_round"
+  );
+
+  // 4. Verify cashout_round fails closed when phase == Idle (BlitzError::RoundNotLive = 6005 = 0x1775)
   const cashoutIdleIx = new TransactionInstruction({
     programId: PROGRAM_ID,
     keys: [
@@ -182,9 +214,9 @@ async function main() {
     ],
     data: Buffer.concat([anchorDisc("cashout_round"), u32Le(20_000)]),
   });
-  await expectCustomError(connection, player, cashoutIdleIx, "0x1775", "cashout_round while Idle");
+  await expectError(connection, player, cashoutIdleIx, ["0x1775", "RoundNotLive"], "cashout_round while Idle");
 
-  // 3. Verify cancel_stale_vrf fails closed when no VRF pending (BlitzError::NoPendingVrf = 6009 = 0x1779)
+  // 5. Verify cancel_stale_vrf fails closed when no VRF pending (BlitzError::NoPendingVrf = 6009 = 0x1779)
   const cancelIdleIx = new TransactionInstruction({
     programId: PROGRAM_ID,
     keys: [
@@ -193,9 +225,9 @@ async function main() {
     ],
     data: anchorDisc("cancel_stale_vrf"),
   });
-  await expectCustomError(connection, player, cancelIdleIx, "0x1779", "cancel_stale_vrf while Idle");
+  await expectError(connection, player, cancelIdleIx, ["0x1779", "NoPendingVrf"], "cancel_stale_vrf while Idle");
 
-  // 4. Verify start_round enforces MIN_STAKE on-chain (BlitzError::StakeTooLow = 6002 = 0x1772)
+  // 6. Verify start_round enforces MIN_STAKE on-chain (BlitzError::StakeTooLow = 6002 = 0x1772)
   const vrfProgramId = new PublicKey("Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz");
   const slotHashesSysvar = new PublicKey("SysvarS1otHashes111111111111111111111111111");
   const lowStakeIx = new TransactionInstruction({
@@ -211,9 +243,9 @@ async function main() {
     ],
     data: Buffer.concat([anchorDisc("start_round"), u64Le(50), Buffer.from([7])]),
   });
-  await expectCustomError(connection, player, lowStakeIx, "0x1772", "start_round below MIN_STAKE");
+  await expectError(connection, player, lowStakeIx, ["0x1772", "StakeTooLow"], "start_round below MIN_STAKE");
 
-  // 5. Verify start_round rejects unauthorized oracle queue (BlitzError::InvalidOracleQueue = 6007 = 0x1777)
+  // 7. Verify start_round rejects unauthorized oracle queue (BlitzError::InvalidOracleQueue = 6007 = 0x1777)
   const fakeQueue = Keypair.generate().publicKey;
   const badQueueIx = new TransactionInstruction({
     programId: PROGRAM_ID,
@@ -228,9 +260,15 @@ async function main() {
     ],
     data: Buffer.concat([anchorDisc("start_round"), u64Le(500), Buffer.from([7])]),
   });
-  await expectCustomError(connection, player, badQueueIx, "0x1777", "start_round with invalid oracle queue");
+  await expectError(
+    connection,
+    player,
+    badQueueIx,
+    ["0x1777", "InvalidOracleQueue"],
+    "start_round with invalid oracle queue"
+  );
 
-  console.log("=== ALL ON-CHAIN SBF E2E ASSERTIONS PASSED ===");
+  console.log("=== ALL 7 ON-CHAIN SBF E2E ASSERTIONS PASSED ===");
 }
 
 main().catch((err) => {
