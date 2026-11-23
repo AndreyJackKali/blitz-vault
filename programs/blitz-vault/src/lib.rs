@@ -17,6 +17,12 @@ declare_id!("BLzVt11111111111111111111111111111111111111");
 /// Scoped VRF requester identity PDA derived at compile time (MagicBlock SDK 0.18+).
 pub const PROGRAM_IDENTITY: Pubkey = program_identity_pubkey(&crate::ID);
 
+/// Compile-time scoped VRF callback signer PDA (`PDA([b"identity", crate::ID], VRF_PROGRAM_ID)`).
+/// Evaluated strictly at compile time so `CallbackArenaVrf` checks a 32-byte constant (~2k CU)
+/// instead of running pure-Rust `const_crypto::ed25519` at runtime (>200k CU limit in SBF).
+pub const SCOPED_VRF_IDENTITY: Pubkey =
+    Pubkey::new_from_array(vrf::consts::scoped_vrf_identity_const(&crate::ID).0);
+
 pub const ARENA_SEED: &[u8] = b"blitz_arena_v1";
 pub const STARTING_CHIPS: u64 = 10_000;
 pub const STARTING_SHARDS: u64 = 150;
@@ -570,6 +576,9 @@ pub struct RequestArenaVrf<'info> {
 #[vrf_callback]
 #[derive(Accounts)]
 pub struct CallbackArenaVrf<'info> {
+    /// Scoped VRF oracle signer PDA bound to `crate::ID` (compile-time constant to keep callback CU minimal).
+    #[account(address = SCOPED_VRF_IDENTITY)]
+    pub vrf_program_identity: Signer<'info>,
     #[account(mut)]
     pub arena: Account<'info, ArenaState>,
 }
@@ -872,6 +881,13 @@ mod tests {
         // Compile-time PROGRAM_IDENTITY must equal runtime PDA [b"identity"] under crate::ID
         let (expected_identity, _) = Pubkey::find_program_address(&[b"identity"], &crate::ID);
         assert_eq!(PROGRAM_IDENTITY, expected_identity);
+
+        // Compile-time SCOPED_VRF_IDENTITY must equal runtime PDA [b"identity", crate::ID] under VRF_PROGRAM_ID
+        let (expected_scoped, _) = Pubkey::find_program_address(
+            &[b"identity", crate::ID.as_ref()],
+            &vrf::consts::VRF_PROGRAM_ID,
+        );
+        assert_eq!(SCOPED_VRF_IDENTITY, expected_scoped);
     }
 
     #[test]
