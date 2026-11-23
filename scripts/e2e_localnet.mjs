@@ -84,19 +84,20 @@ function parseArenaState(data) {
 }
 
 async function expectError(connection, payer, ix, expectedSubstrings, label) {
-  const tx = new Transaction().add(ix);
-  try {
-    await sendAndConfirmTransaction(connection, tx, [payer], { commitment: "confirmed" });
-    assert.fail(`${label}: expected transaction to fail, but succeeded`);
-  } catch (err) {
-    const msg = String(err?.message || err) + " " + JSON.stringify(err?.logs || []);
-    const matched = expectedSubstrings.some((s) => msg.includes(s));
-    assert.ok(
-      matched,
-      `${label}: expected one of ${JSON.stringify(expectedSubstrings)}, got: ${msg}`
-    );
-    console.log(`✅ [PASS] ${label} rejected cleanly on-chain (${expectedSubstrings[0]})`);
-  }
+  const { blockhash } = await connection.getLatestBlockhash("confirmed");
+  const tx = new Transaction({ recentBlockhash: blockhash, feePayer: payer.publicKey }).add(ix);
+  const sim = await connection.simulateTransaction(tx, [payer]);
+  assert.ok(sim.value.err, `${label}: expected on-chain SBF error, but simulation succeeded`);
+  const logs = sim.value.logs || [];
+  const combined = JSON.stringify(sim.value.err) + " " + logs.join("\n");
+  const matched = expectedSubstrings.some((s) => combined.includes(s));
+  assert.ok(
+    matched,
+    `${label}: expected one of ${JSON.stringify(expectedSubstrings)}, got err=${JSON.stringify(sim.value.err)} logs=${JSON.stringify(logs)}`
+  );
+  console.log(`✅ [PASS] ${label} rejected cleanly on-chain (${expectedSubstrings[0]})`);
+  const errLine = logs.find((l) => l.includes("Error") || l.includes("already in use") || l.includes("failed"));
+  if (errLine) console.log("   BPF Log:", errLine);
 }
 
 async function main() {
@@ -201,7 +202,7 @@ async function main() {
     connection,
     intruder,
     unauthIx,
-    ["0x7d6", "ConstraintSeeds", "0x1770"],
+    ["0x7d6", "2006", "ConstraintSeeds", "0x1770", "6000"],
     "unauthorized intruder cashout_round"
   );
 
@@ -214,7 +215,7 @@ async function main() {
     ],
     data: Buffer.concat([anchorDisc("cashout_round"), u32Le(20_000)]),
   });
-  await expectError(connection, player, cashoutIdleIx, ["0x1775", "RoundNotLive"], "cashout_round while Idle");
+  await expectError(connection, player, cashoutIdleIx, ["0x1775", "6005", "RoundNotLive"], "cashout_round while Idle");
 
   // 5. Verify cancel_stale_vrf fails closed when no VRF pending (BlitzError::NoPendingVrf = 6009 = 0x1779)
   const cancelIdleIx = new TransactionInstruction({
@@ -225,7 +226,7 @@ async function main() {
     ],
     data: anchorDisc("cancel_stale_vrf"),
   });
-  await expectError(connection, player, cancelIdleIx, ["0x1779", "NoPendingVrf"], "cancel_stale_vrf while Idle");
+  await expectError(connection, player, cancelIdleIx, ["0x1779", "6009", "NoPendingVrf"], "cancel_stale_vrf while Idle");
 
   // 6. Verify start_round enforces MIN_STAKE on-chain (BlitzError::StakeTooLow = 6002 = 0x1772)
   const vrfProgramId = new PublicKey("Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz");
@@ -243,7 +244,7 @@ async function main() {
     ],
     data: Buffer.concat([anchorDisc("start_round"), u64Le(50), Buffer.from([7])]),
   });
-  await expectError(connection, player, lowStakeIx, ["0x1772", "StakeTooLow"], "start_round below MIN_STAKE");
+  await expectError(connection, player, lowStakeIx, ["0x1772", "6002", "StakeTooLow"], "start_round below MIN_STAKE");
 
   // 7. Verify start_round rejects unauthorized oracle queue (BlitzError::InvalidOracleQueue = 6007 = 0x1777)
   const fakeQueue = Keypair.generate().publicKey;
@@ -264,7 +265,7 @@ async function main() {
     connection,
     player,
     badQueueIx,
-    ["0x1777", "InvalidOracleQueue"],
+    ["0x1777", "6007", "InvalidOracleQueue"],
     "start_round with invalid oracle queue"
   );
 
