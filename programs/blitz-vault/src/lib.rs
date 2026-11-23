@@ -15,14 +15,19 @@ use ephemeral_rollups_sdk::{
 declare_id!("BLzVt11111111111111111111111111111111111111");
 
 /// Scoped VRF requester identity PDA derived at compile time (MagicBlock SDK 0.18+).
-const PROGRAM_IDENTITY: Pubkey = program_identity_pubkey(&crate::ID);
+pub const PROGRAM_IDENTITY: Pubkey = program_identity_pubkey(&crate::ID);
 
 pub const ARENA_SEED: &[u8] = b"blitz_arena_v1";
 pub const STARTING_CHIPS: u64 = 10_000;
+pub const STARTING_SHARDS: u64 = 150;
 pub const MIN_STAKE: u64 = 100;
+pub const MIN_CASHOUT_BPS: u32 = 10_500;
+pub const MAX_CRASH_BPS: u32 = 500_000;
 pub const PACK_SHARD_COST: u64 = 100;
 pub const VRF_TIMEOUT_SECONDS: i64 = 125;
 pub const MAX_RELIC_BOOST_BPS: u16 = 2_500; // +25.00% max yield boost
+pub const VRF_DOMAIN_ROUND: u8 = 0x01;
+pub const VRF_DOMAIN_RELIC: u8 = 0xA5;
 
 #[ephemeral]
 #[program]
@@ -34,7 +39,7 @@ pub mod blitz_vault {
         let arena = &mut ctx.accounts.arena;
         arena.player = ctx.accounts.player.key();
         arena.chips = STARTING_CHIPS;
-        arena.shards = 150; // Enough for 1 introductory Relic Pack opening
+        arena.shards = STARTING_SHARDS; // Enough for 1 introductory Relic Pack opening
         arena.round_nonce = 0;
         arena.phase = ArenaPhase::Idle as u8;
         arena.active_stake = 0;
@@ -94,9 +99,15 @@ pub mod blitz_vault {
         require!(stake <= arena.chips, BlitzError::InsufficientChips);
 
         let now = Clock::get()?.unix_timestamp;
-        let next_nonce = arena.round_nonce.checked_add(1).ok_or(BlitzError::MathOverflow)?;
+        let next_nonce = arena
+            .round_nonce
+            .checked_add(1)
+            .ok_or(BlitzError::MathOverflow)?;
 
-        arena.chips = arena.chips.checked_sub(stake).ok_or(BlitzError::MathOverflow)?;
+        arena.chips = arena
+            .chips
+            .checked_sub(stake)
+            .ok_or(BlitzError::MathOverflow)?;
         arena.active_stake = stake;
         arena.round_nonce = next_nonce;
         arena.phase = ArenaPhase::AwaitingVrf as u8;
@@ -104,10 +115,7 @@ pub mod blitz_vault {
         arena.crash_point_bps = 0;
         arena.last_vrf_request_ts = now;
 
-        let mut caller_seed = [0u8; 32];
-        caller_seed[0] = client_seed;
-        caller_seed[1..9].copy_from_slice(&next_nonce.to_le_bytes());
-        caller_seed[9..17].copy_from_slice(&now.to_le_bytes());
+        let caller_seed = build_vrf_caller_seed(client_seed, next_nonce, now, VRF_DOMAIN_ROUND);
 
         let params = RequestRandomnessParams {
             payer: ctx.accounts.payer.key(),
@@ -170,41 +178,24 @@ pub mod blitz_vault {
     /// Sub-second gasless ER settlement: player locks in target cashout multiplier (bps).
     /// If target_mult_bps <= crash_point_bps -> WIN (payout + Relic yield boost + Vault Shards).
     /// Otherwise -> BUST (streak resets).
-    pub fn cashout_round(
-        ctx: Context<PlayArena>,
-        target_mult_bps: u32,
-    ) -> Result<()> {
+    pub fn cashout_round(ctx: Context<PlayArena>, target_mult_bps: u32) -> Result<()> {
         let arena = &mut ctx.accounts.arena;
         require!(
             arena.phase == ArenaPhase::Live as u8,
             BlitzError::RoundNotLive
         );
-        require!(target_mult_bps >= 10_500, BlitzError::InvalidMultiplier); // min 1.05x
+        require!(
+            target_mult_bps >= MIN_CASHOUT_BPS,
+            BlitzError::InvalidMultiplier
+        );
 
         let stake = arena.active_stake;
         arena.rounds_played = arena.rounds_played.saturating_add(1);
         arena.last_cashout_bps = target_mult_bps;
 
         if target_mult_bps <= arena.crash_point_bps {
-            // Base payout = stake * target_mult_bps / 10_000
-            let base_payout = (stake as u128)
-                .checked_mul(target_mult_bps as u128)
-                .ok_or(BlitzError::MathOverflow)?
-                .checked_div(10_000)
-                .ok_or(BlitzError::MathOverflow)? as u64;
-
-            // Profit gets boosted by owned Collectible Relics (up to +25%)
-            let raw_profit = base_payout.saturating_sub(stake);
-            let boost_bps = arena.relic_boost_bps();
-            let bonus_profit = (raw_profit as u128)
-                .checked_mul(boost_bps as u128)
-                .ok_or(BlitzError::MathOverflow)?
-                .checked_div(10_000)
-                .ok_or(BlitzError::MathOverflow)? as u64;
-
-            let total_payout = base_payout
-                .checked_add(bonus_profit)
-                .ok_or(BlitzError::MathOverflow)?;
+            let (_base_payout, bonus_profit, total_payout) =
+                compute_payout(stake, target_mult_bps, arena.relic_boost_bps())?;
             let net_profit = total_payout.saturating_sub(stake);
 
             arena.chips = arena
@@ -249,10 +240,7 @@ pub mod blitz_vault {
     }
 
     /// Burn 100 Vault Shards inside the ER to open a provably fair VRF Relic Pack.
-    pub fn open_relic_pack(
-        ctx: Context<RequestArenaVrf>,
-        client_seed: u8,
-    ) -> Result<()> {
+    pub fn open_relic_pack(ctx: Context<RequestArenaVrf>, client_seed: u8) -> Result<()> {
         let arena = &mut ctx.accounts.arena;
         require!(
             arena.phase == ArenaPhase::Idle as u8,
@@ -264,7 +252,10 @@ pub mod blitz_vault {
         );
 
         let now = Clock::get()?.unix_timestamp;
-        let next_nonce = arena.round_nonce.checked_add(1).ok_or(BlitzError::MathOverflow)?;
+        let next_nonce = arena
+            .round_nonce
+            .checked_add(1)
+            .ok_or(BlitzError::MathOverflow)?;
 
         arena.shards = arena
             .shards
@@ -275,9 +266,7 @@ pub mod blitz_vault {
         arena.pending_vrf_kind = VrfKind::RelicPack as u8;
         arena.last_vrf_request_ts = now;
 
-        let mut caller_seed = [0u8; 32];
-        caller_seed[0] = client_seed ^ 0xA5;
-        caller_seed[1..9].copy_from_slice(&next_nonce.to_le_bytes());
+        let caller_seed = build_vrf_caller_seed(client_seed, next_nonce, now, VRF_DOMAIN_RELIC);
 
         let params = RequestRandomnessParams {
             payer: ctx.accounts.payer.key(),
@@ -318,19 +307,13 @@ pub mod blitz_vault {
         );
 
         let roll = vrf::rnd::random_u8_with_range(&randomness, 1, 100);
-        let tier = if roll <= 3 {
-            arena.relics_mythic = arena.relics_mythic.saturating_add(1);
-            4u8 // Mythic
-        } else if roll <= 15 {
-            arena.relics_epic = arena.relics_epic.saturating_add(1);
-            3u8 // Epic
-        } else if roll <= 40 {
-            arena.relics_rare = arena.relics_rare.saturating_add(1);
-            2u8 // Rare
-        } else {
-            arena.relics_common = arena.relics_common.saturating_add(1);
-            1u8 // Common
-        };
+        let tier = compute_relic_tier(roll);
+        match tier {
+            4 => arena.relics_mythic = arena.relics_mythic.saturating_add(1),
+            3 => arena.relics_epic = arena.relics_epic.saturating_add(1),
+            2 => arena.relics_rare = arena.relics_rare.saturating_add(1),
+            _ => arena.relics_common = arena.relics_common.saturating_add(1),
+        }
 
         arena.last_relic_tier = tier;
         arena.last_vrf_hash = randomness;
@@ -357,7 +340,7 @@ pub mod blitz_vault {
 
         let now = Clock::get()?.unix_timestamp;
         require!(
-            now.saturating_sub(arena.last_vrf_request_ts) >= VRF_TIMEOUT_SECONDS,
+            is_vrf_expired(arena.last_vrf_request_ts, now),
             BlitzError::VrfNotExpiredYet
         );
 
@@ -406,14 +389,24 @@ pub mod blitz_vault {
     }
 }
 
+/// Build a domain-separated 32-byte caller seed for MagicBlock VRF requests.
+pub fn build_vrf_caller_seed(client_seed: u8, nonce: u64, ts: i64, domain_tag: u8) -> [u8; 32] {
+    let mut caller_seed = [0u8; 32];
+    caller_seed[0] = client_seed ^ domain_tag;
+    caller_seed[1..9].copy_from_slice(&nonce.to_le_bytes());
+    caller_seed[9..17].copy_from_slice(&ts.to_le_bytes());
+    caller_seed[17] = domain_tag;
+    caller_seed
+}
+
 /// Derive a heavy-tail crash multiplier in basis points (10_000 = 1.00x, cap 500_000 = 50.00x)
-/// using standard 1% house-edge formula: M = floor(9900 / (1 - U)), with 3% instant crash at 1.00x.
-fn derive_crash_point_bps(randomness: &[u8; 32]) -> u32 {
+/// using standard 1% house-edge formula: M = floor(9900 / (1 - U)), with ~3% instant crash at 1.00x.
+pub fn derive_crash_point_bps(randomness: &[u8; 32]) -> u32 {
     let mut raw_bytes = [0u8; 8];
     raw_bytes.copy_from_slice(&randomness[0..8]);
     let r = u64::from_le_bytes(raw_bytes);
 
-    // 3% instant crash (1.00x)
+    // ~3.03% instant crash (1.00x)
     if r % 33 == 0 {
         return 10_000;
     }
@@ -421,8 +414,55 @@ fn derive_crash_point_bps(randomness: &[u8; 32]) -> u32 {
     // Map top 32 bits to u in [0, 9_999]
     let u = (r >> 32) % 10_000;
     let denom = 10_000u64.saturating_sub(u).max(1);
-    let mult_bps = (99_000_000u64 / denom).clamp(10_500, 500_000);
+    let mult_bps = (99_000_000u64 / denom).clamp(MIN_CASHOUT_BPS as u64, MAX_CRASH_BPS as u64);
     mult_bps as u32
+}
+
+/// Compute (base_payout, bonus_profit, total_payout) with checked u128 arithmetic.
+pub fn compute_payout(stake: u64, target_mult_bps: u32, boost_bps: u16) -> Result<(u64, u64, u64)> {
+    let clamped_boost = boost_bps.min(MAX_RELIC_BOOST_BPS);
+    let base_payout_u128 = (stake as u128)
+        .checked_mul(target_mult_bps as u128)
+        .ok_or(BlitzError::MathOverflow)?
+        .checked_div(10_000)
+        .ok_or(BlitzError::MathOverflow)?;
+    let base_payout = u64::try_from(base_payout_u128).map_err(|_| BlitzError::MathOverflow)?;
+
+    let raw_profit = base_payout.saturating_sub(stake);
+    let bonus_profit_u128 = (raw_profit as u128)
+        .checked_mul(clamped_boost as u128)
+        .ok_or(BlitzError::MathOverflow)?
+        .checked_div(10_000)
+        .ok_or(BlitzError::MathOverflow)?;
+    let bonus_profit = u64::try_from(bonus_profit_u128).map_err(|_| BlitzError::MathOverflow)?;
+
+    let total_payout = base_payout
+        .checked_add(bonus_profit)
+        .ok_or(BlitzError::MathOverflow)?;
+    Ok((base_payout, bonus_profit, total_payout))
+}
+
+/// Map a 1..=100 VRF roll to Relic tier: 4=Mythic(3%), 3=Epic(12%), 2=Rare(25%), 1=Common(60%).
+pub fn compute_relic_tier(roll: u8) -> u8 {
+    if roll <= 3 {
+        4
+    } else if roll <= 15 {
+        3
+    } else if roll <= 40 {
+        2
+    } else {
+        1
+    }
+}
+
+/// Check whether a pending VRF request has exceeded the 125-second timeout window.
+pub fn is_vrf_expired(request_ts: i64, now_ts: i64) -> bool {
+    now_ts.saturating_sub(request_ts) >= VRF_TIMEOUT_SECONDS
+}
+
+/// Derive the canonical ArenaState PDA for a given player pubkey.
+pub fn derive_arena_pda(player: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[ARENA_SEED, player.as_ref()], &crate::ID)
 }
 
 #[repr(u8)]
@@ -468,10 +508,11 @@ pub struct ArenaState {
 impl ArenaState {
     /// Total permanent profit boost from owned collectible Relics (capped at +25%).
     pub fn relic_boost_bps(&self) -> u16 {
-        let raw = (self.relics_common as u32) * 100
-            + (self.relics_rare as u32) * 300
-            + (self.relics_epic as u32) * 600
-            + (self.relics_mythic as u32) * 1_200;
+        let raw = (self.relics_common as u32)
+            .saturating_mul(100)
+            .saturating_add((self.relics_rare as u32).saturating_mul(300))
+            .saturating_add((self.relics_epic as u32).saturating_mul(600))
+            .saturating_add((self.relics_mythic as u32).saturating_mul(1_200));
         raw.min(MAX_RELIC_BOOST_BPS as u32) as u16
     }
 }
@@ -591,34 +632,19 @@ pub enum BlitzError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ephemeral_rollups_sdk::consts::{
+        DELEGATION_PROGRAM_ID, MAGIC_CONTEXT_ID, MAGIC_PROGRAM_ID,
+    };
+    use std::collections::HashSet;
 
-    #[test]
-    fn crash_point_bounds_and_instant_crash() {
-        let zero = [0u8; 32];
-        assert_eq!(derive_crash_point_bps(&zero), 10_000);
-
-        for i in 1u8..=200 {
-            let mut seed = [0u8; 32];
-            seed[0] = i;
-            seed[4] = i.wrapping_mul(37);
-            seed[5] = i.wrapping_mul(113);
-            let m = derive_crash_point_bps(&seed);
-            assert!(
-                m == 10_000 || (10_500..=500_000).contains(&m),
-                "unexpected crash multiplier: {m}"
-            );
-        }
-    }
-
-    #[test]
-    fn relic_boost_scales_and_caps() {
-        let mut arena = ArenaState {
-            player: Pubkey::default(),
+    fn sample_arena(player: Pubkey) -> ArenaState {
+        ArenaState {
+            player,
             chips: STARTING_CHIPS,
-            shards: 0,
+            shards: STARTING_SHARDS,
             round_nonce: 0,
-            phase: 0,
-            pending_vrf_kind: 0,
+            phase: ArenaPhase::Idle as u8,
+            pending_vrf_kind: VrfKind::None as u8,
             active_stake: 0,
             crash_point_bps: 0,
             last_cashout_bps: 0,
@@ -627,16 +653,354 @@ mod tests {
             best_streak: 0,
             rounds_played: 0,
             total_pnl: 0,
-            relics_common: 2,
-            relics_rare: 1,
-            relics_epic: 1,
+            relics_common: 0,
+            relics_rare: 0,
+            relics_epic: 0,
             relics_mythic: 0,
             last_relic_tier: 0,
             last_vrf_hash: [0u8; 32],
-            bump: 0,
-        };
+            bump: 255,
+        }
+    }
+
+    #[test]
+    fn crash_point_bounds_and_edge_cases() {
+        // All-zero seed triggers r % 33 == 0 -> instant crash 1.00x
+        assert_eq!(derive_crash_point_bps(&[0u8; 32]), 10_000);
+
+        // Multiple of 33 in low 64 bits -> instant crash
+        let mut mul33 = [0u8; 32];
+        mul33[0..8].copy_from_slice(&(33u64 * 999).to_le_bytes());
+        assert_eq!(derive_crash_point_bps(&mul33), 10_000);
+
+        // u = 9_999 (denom = 1) -> hits 50.00x cap (500_000 bps)
+        let mut max_cap = [0u8; 32];
+        let val = (9_999u64 << 32) | 1u64; // ensure % 33 != 0
+        assert_ne!(val % 33, 0);
+        max_cap[0..8].copy_from_slice(&val.to_le_bytes());
+        assert_eq!(derive_crash_point_bps(&max_cap), MAX_CRASH_BPS);
+
+        // u = 0 (denom = 10_000) -> 9_900 clamped up to 10_500 (1.05x floor for non-instant rounds)
+        let mut floor_seed = [0u8; 32];
+        floor_seed[0..8].copy_from_slice(&1u64.to_le_bytes());
+        assert_eq!(derive_crash_point_bps(&floor_seed), MIN_CASHOUT_BPS);
+
+        // All-FF seed must remain cleanly within bounds
+        let all_ff = [0xFFu8; 32];
+        let m_ff = derive_crash_point_bps(&all_ff);
+        assert!(m_ff == 10_000 || (MIN_CASHOUT_BPS..=MAX_CRASH_BPS).contains(&m_ff));
+    }
+
+    #[test]
+    fn crash_point_statistical_heavy_tail_distribution() {
+        let mut instant = 0u32;
+        let mut over_2x = 0u32;
+        let mut over_10x = 0u32;
+        let total = 5_000u32;
+
+        for i in 0..total {
+            // Simple deterministic splitmix64 PRNG for test vectors
+            let mut x = (i as u64).wrapping_add(0x9E37_79B9_7F4A_7C15);
+            x = (x ^ (x >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            x = (x ^ (x >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+            x = x ^ (x >> 31);
+            let mut seed = [0u8; 32];
+            seed[0..8].copy_from_slice(&x.to_le_bytes());
+            let m = derive_crash_point_bps(&seed);
+            assert!(m == 10_000 || (MIN_CASHOUT_BPS..=MAX_CRASH_BPS).contains(&m));
+            if m == 10_000 {
+                instant += 1;
+            }
+            if m >= 20_000 {
+                over_2x += 1;
+            }
+            if m >= 100_000 {
+                over_10x += 1;
+            }
+        }
+
+        // Expect ~3% instant crashes (~150/5000), ~48% >= 2x, ~9% >= 10x
+        assert!((100..=210).contains(&instant), "instant={instant}");
+        assert!((2100..=2700).contains(&over_2x), "over_2x={over_2x}");
+        assert!((350..=620).contains(&over_10x), "over_10x={over_10x}");
+    }
+
+    #[test]
+    fn vrf_caller_seed_domain_separation_and_determinism() {
+        let s_round_a = build_vrf_caller_seed(42, 1, 1_700_000_000, VRF_DOMAIN_ROUND);
+        let s_round_b = build_vrf_caller_seed(42, 1, 1_700_000_000, VRF_DOMAIN_ROUND);
+        let s_relic = build_vrf_caller_seed(42, 1, 1_700_000_000, VRF_DOMAIN_RELIC);
+        let s_next_nonce = build_vrf_caller_seed(42, 2, 1_700_000_000, VRF_DOMAIN_ROUND);
+        let s_next_ts = build_vrf_caller_seed(42, 1, 1_700_000_001, VRF_DOMAIN_ROUND);
+
+        assert_eq!(s_round_a, s_round_b);
+        assert_ne!(s_round_a, s_relic, "round and relic VRF domains must differ");
+        assert_ne!(s_round_a, s_next_nonce, "nonce must perturb VRF seed");
+        assert_ne!(s_round_a, s_next_ts, "timestamp must perturb VRF seed");
+        assert_eq!(s_round_a[17], VRF_DOMAIN_ROUND);
+        assert_eq!(s_relic[17], VRF_DOMAIN_RELIC);
+    }
+
+    #[test]
+    fn relic_boost_scales_caps_and_never_overflows() {
+        let mut arena = sample_arena(Pubkey::default());
+        assert_eq!(arena.relic_boost_bps(), 0);
+
+        arena.relics_common = 2; // 200
+        arena.relics_rare = 1;   // 300
+        arena.relics_epic = 1;   // 600
         assert_eq!(arena.relic_boost_bps(), 1_100);
-        arena.relics_mythic = 5;
+
+        arena.relics_mythic = 1; // +1200 -> 2300
+        assert_eq!(arena.relic_boost_bps(), 2_300);
+
+        arena.relics_mythic = 5; // uncapped 7100 -> capped at 2500
         assert_eq!(arena.relic_boost_bps(), MAX_RELIC_BOOST_BPS);
+
+        // Extreme u16::MAX overflow resilience
+        arena.relics_common = u16::MAX;
+        arena.relics_rare = u16::MAX;
+        arena.relics_epic = u16::MAX;
+        arena.relics_mythic = u16::MAX;
+        assert_eq!(arena.relic_boost_bps(), MAX_RELIC_BOOST_BPS);
+    }
+
+    #[test]
+    fn relic_drop_table_boundaries_exact() {
+        for roll in 1..=3 {
+            assert_eq!(compute_relic_tier(roll), 4, "roll {roll} must be Mythic");
+        }
+        for roll in 4..=15 {
+            assert_eq!(compute_relic_tier(roll), 3, "roll {roll} must be Epic");
+        }
+        for roll in 16..=40 {
+            assert_eq!(compute_relic_tier(roll), 2, "roll {roll} must be Rare");
+        }
+        for roll in 41..=100 {
+            assert_eq!(compute_relic_tier(roll), 1, "roll {roll} must be Common");
+        }
+    }
+
+    #[test]
+    fn payout_solvency_and_relic_boost_math() {
+        // 1,000 stake @ 2.00x with 0% boost -> base 2,000, bonus 0, total 2,000
+        let (base, bonus, total) = compute_payout(1_000, 20_000, 0).unwrap();
+        assert_eq!((base, bonus, total), (2_000, 0, 2_000));
+
+        // 1,000 stake @ 2.00x with +25% max Relic boost -> profit 1,000 * 25% = +250 -> total 2,250
+        let (base, bonus, total) = compute_payout(1_000, 20_000, 2_500).unwrap();
+        assert_eq!((base, bonus, total), (2_000, 250, 2_250));
+
+        // Boost above MAX_RELIC_BOOST_BPS is clamped defensively inside compute_payout
+        let (_, bonus_clamped, total_clamped) = compute_payout(1_000, 20_000, 9_999).unwrap();
+        assert_eq!((bonus_clamped, total_clamped), (250, 2_250));
+
+        // 50.00x max crash payout with 10,000 stake and max Relic boost
+        let (base_50, bonus_50, total_50) = compute_payout(10_000, MAX_CRASH_BPS, 2_500).unwrap();
+        assert_eq!(base_50, 500_000);
+        assert_eq!(bonus_50, 122_500); // 25% of 490_000 raw profit
+        assert_eq!(total_50, 622_500);
+
+        // Solvency bound: for any stake >= MIN_STAKE and mult >= MIN_CASHOUT_BPS, total >= base >= stake
+        for stake in [100u64, 500, 10_000, 1_000_000] {
+            for mult in [MIN_CASHOUT_BPS, 15_000, 35_000, MAX_CRASH_BPS] {
+                let (b, bo, t) = compute_payout(stake, mult, 1_200).unwrap();
+                assert!(b >= stake && t == b + bo && t >= stake);
+            }
+        }
+
+        // Overflow guard on u64::MAX stake
+        assert!(compute_payout(u64::MAX, MAX_CRASH_BPS, 2_500).is_err());
+    }
+
+    #[test]
+    fn arena_pda_derivation_is_unique_and_canonical() {
+        let p1 = Pubkey::new_from_array([1u8; 32]);
+        let p2 = Pubkey::new_from_array([2u8; 32]);
+        let (pda1, bump1) = derive_arena_pda(&p1);
+        let (pda2, bump2) = derive_arena_pda(&p2);
+        assert_ne!(pda1, pda2);
+        assert_eq!(
+            Pubkey::create_program_address(&[ARENA_SEED, p1.as_ref(), &[bump1]], &crate::ID)
+                .unwrap(),
+            pda1
+        );
+        assert_eq!(
+            Pubkey::create_program_address(&[ARENA_SEED, p2.as_ref(), &[bump2]], &crate::ID)
+                .unwrap(),
+            pda2
+        );
+    }
+
+    #[test]
+    fn arena_state_borsh_layout_matches_init_space() {
+        let player = Pubkey::new_from_array([7u8; 32]);
+        let arena = sample_arena(player);
+        let mut buf = Vec::new();
+        arena.try_serialize(&mut buf).unwrap();
+        assert_eq!(
+            buf.len(),
+            8 + ArenaState::INIT_SPACE,
+            "Serialized ArenaState length must match 8 + INIT_SPACE"
+        );
+        let decoded = ArenaState::try_deserialize(&mut buf.as_slice()).unwrap();
+        assert_eq!(decoded.player, player);
+        assert_eq!(decoded.chips, STARTING_CHIPS);
+        assert_eq!(decoded.shards, STARTING_SHARDS);
+    }
+
+    #[test]
+    fn magicblock_er_and_vrf_program_ids_verified() {
+        // Verify canonical MagicBlock Delegation Program, Magic Program, Magic Context & VRF Queues
+        assert_eq!(
+            DELEGATION_PROGRAM_ID.to_string(),
+            "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
+        );
+        assert_eq!(
+            MAGIC_PROGRAM_ID.to_string(),
+            "Magic11111111111111111111111111111111111111"
+        );
+        assert_eq!(
+            MAGIC_CONTEXT_ID.to_string(),
+            "MagicContext1111111111111111111111111111111"
+        );
+        assert_eq!(
+            vrf::consts::DEFAULT_EPHEMERAL_QUEUE.to_string(),
+            "5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc"
+        );
+
+        // Compile-time PROGRAM_IDENTITY must equal runtime PDA [b"identity"] under crate::ID
+        let (expected_identity, _) = Pubkey::find_program_address(&[b"identity"], &crate::ID);
+        assert_eq!(PROGRAM_IDENTITY, expected_identity);
+    }
+
+    #[test]
+    fn magicblock_vrf_request_instruction_layouts() {
+        let payer = Pubkey::new_from_array([9u8; 32]);
+        let (arena_pda, _) = derive_arena_pda(&payer);
+
+        for (disc, domain) in [
+            (instruction::CallbackRoundVrf::DISCRIMINATOR, VRF_DOMAIN_ROUND),
+            (instruction::CallbackRelicVrf::DISCRIMINATOR, VRF_DOMAIN_RELIC),
+        ] {
+            let caller_seed = build_vrf_caller_seed(17, 3, 1_760_000_000, domain);
+            let params = RequestRandomnessParams {
+                payer,
+                oracle_queue: vrf::consts::DEFAULT_EPHEMERAL_QUEUE,
+                callback_program_id: crate::ID,
+                callback_discriminator: disc.to_vec(),
+                caller_seed,
+                accounts_metas: Some(vec![SerializableAccountMeta {
+                    pubkey: arena_pda,
+                    is_signer: false,
+                    is_writable: true,
+                }]),
+                callback_args: Some(3u64.to_le_bytes().to_vec()),
+                ..Default::default()
+            };
+            let ix = create_request_randomness_ix_const(params, PROGRAM_IDENTITY);
+            assert!(
+                ix.accounts.iter().any(|m| m.pubkey == payer && m.is_signer),
+                "payer must be signer in VRF request ix"
+            );
+            assert!(
+                ix.accounts
+                    .iter()
+                    .any(|m| m.pubkey == vrf::consts::DEFAULT_EPHEMERAL_QUEUE && m.is_writable),
+                "ephemeral oracle queue must be writable"
+            );
+            assert!(
+                ix.accounts.iter().any(|m| m.pubkey == PROGRAM_IDENTITY),
+                "scoped PROGRAM_IDENTITY must be included in VRF request ix"
+            );
+            assert!(!ix.data.is_empty());
+        }
+    }
+
+    #[test]
+    fn magicblock_delegation_pda_layouts() {
+        let player = Pubkey::new_from_array([11u8; 32]);
+        let (arena_pda, _) = derive_arena_pda(&player);
+        let (buffer_pda, _) =
+            Pubkey::find_program_address(&[b"buffer", arena_pda.as_ref()], &crate::ID);
+        let (delegation_record, _) = Pubkey::find_program_address(
+            &[b"delegation", arena_pda.as_ref()],
+            &DELEGATION_PROGRAM_ID,
+        );
+        let (delegation_metadata, _) = Pubkey::find_program_address(
+            &[b"delegation-metadata", arena_pda.as_ref()],
+            &DELEGATION_PROGRAM_ID,
+        );
+        let unique: HashSet<Pubkey> = [
+            arena_pda,
+            buffer_pda,
+            delegation_record,
+            delegation_metadata,
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(unique.len(), 4, "all delegation PDAs must be distinct");
+    }
+
+    #[test]
+    fn all_instruction_discriminators_are_unique() {
+        let discs: Vec<&[u8]> = vec![
+            instruction::InitializeArena::DISCRIMINATOR,
+            instruction::DelegateArena::DISCRIMINATOR,
+            instruction::StartRound::DISCRIMINATOR,
+            instruction::CallbackRoundVrf::DISCRIMINATOR,
+            instruction::CashoutRound::DISCRIMINATOR,
+            instruction::OpenRelicPack::DISCRIMINATOR,
+            instruction::CallbackRelicVrf::DISCRIMINATOR,
+            instruction::CancelStaleVrf::DISCRIMINATOR,
+            instruction::CommitArena::DISCRIMINATOR,
+            instruction::UndelegateArena::DISCRIMINATOR,
+        ];
+        let set: HashSet<&[u8]> = discs.iter().copied().collect();
+        assert_eq!(set.len(), 10, "all 10 Anchor instructions must have unique discriminators");
+    }
+
+    #[test]
+    fn stale_vrf_timeout_boundary_and_nonce_guard() {
+        let t0 = 1_760_000_000i64;
+        assert!(!is_vrf_expired(t0, t0));
+        assert!(!is_vrf_expired(t0, t0 + VRF_TIMEOUT_SECONDS - 1));
+        assert!(is_vrf_expired(t0, t0 + VRF_TIMEOUT_SECONDS));
+        assert!(is_vrf_expired(t0, t0 + VRF_TIMEOUT_SECONDS + 60));
+        // Clock skew backward must never falsely expire
+        assert!(!is_vrf_expired(t0, t0 - 10));
+    }
+
+    #[test]
+    fn full_gameplay_lifecycle_simulation() {
+        let player = Pubkey::new_from_array([33u8; 32]);
+        let mut arena = sample_arena(player);
+
+        // 1. Open introductory Relic Pack (150 -> 50 shards), simulate Epic roll (roll = 10 -> +6%)
+        arena.shards -= PACK_SHARD_COST;
+        let tier = compute_relic_tier(10);
+        assert_eq!(tier, 3);
+        arena.relics_epic += 1;
+        assert_eq!(arena.relic_boost_bps(), 600);
+
+        // 2. Round 1: Stake 1,000, crash = 3.00x, cash out @ 2.00x -> WIN + 6% relic boost on profit
+        arena.chips -= 1_000;
+        let (_, bonus, total) = compute_payout(1_000, 20_000, arena.relic_boost_bps()).unwrap();
+        assert_eq!(bonus, 60);
+        assert_eq!(total, 2_060);
+        arena.chips += total;
+        arena.win_streak += 1;
+        arena.shards += 25 + (arena.win_streak as u64) * 10; // +35 shards -> 85
+
+        assert_eq!(arena.chips, 11_060);
+        assert_eq!(arena.shards, 85);
+        assert_eq!(arena.win_streak, 1);
+
+        // 3. Round 2: Bust -> streak resets, +10 consolation shards
+        arena.chips -= 500;
+        arena.win_streak = 0;
+        arena.shards += 10;
+        assert_eq!(arena.chips, 10_560);
+        assert_eq!(arena.shards, 95);
     }
 }

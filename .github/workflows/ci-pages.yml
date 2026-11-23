@@ -1,4 +1,4 @@
-name: Deploy Web Demo & Check Anchor Program
+name: Build SBF, Run E2E & Deploy Web Demo
 
 on:
   push:
@@ -15,7 +15,98 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  rust-unit-tests:
+    name: Rust Check & Extended Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Cargo check & 14 unit tests
+        run: |
+          cargo check --manifest-path programs/blitz-vault/Cargo.toml
+          cargo test --manifest-path programs/blitz-vault/Cargo.toml --lib -- --nocapture
+
+  build-sbf-and-e2e:
+    name: Build Solana SBF (.so) & Localnet E2E
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Cache Agave toolchain & SBF build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.local/share/solana
+            ~/.cache/solana
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-agave-sbf-${{ hashFiles('Cargo.toml', 'programs/blitz-vault/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-agave-sbf-
+
+      - name: Install Agave Solana CLI (cargo-build-sbf & solana-test-validator)
+        run: |
+          if ! command -v cargo-build-sbf >/dev/null 2>&1 && [ ! -x "$HOME/.local/share/solana/install/active_release/bin/cargo-build-sbf" ]; then
+            sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
+          fi
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+
+      - name: Verify Agave Toolchain
+        run: |
+          solana --version
+          cargo-build-sbf --version
+
+      - name: Build Solana SBF ELF Binary (blitz_vault.so)
+        run: |
+          cargo-build-sbf --manifest-path programs/blitz-vault/Cargo.toml --sbf-out-dir target/deploy
+          ls -lh target/deploy/blitz_vault.so
+          file target/deploy/blitz_vault.so
+          sha256sum target/deploy/blitz_vault.so | tee target/deploy/blitz_vault.so.sha256
+
+      - name: Upload Compiled SBF Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: blitz-vault-sbf-binary
+          path: |
+            target/deploy/blitz_vault.so
+            target/deploy/blitz_vault.so.sha256
+
+      - name: Run On-Chain SBF E2E Test on solana-test-validator
+        run: |
+          npm install --no-save @solana/web3.js
+          solana-test-validator \
+            --reset \
+            --quiet \
+            --bpf-program BLzVt11111111111111111111111111111111111111 target/deploy/blitz_vault.so \
+            --ledger /tmp/blitz-ledger > /tmp/validator.log 2>&1 &
+          VALIDATOR_PID=$!
+          trap "kill $VALIDATOR_PID 2>/dev/null || true" EXIT
+
+          echo "Waiting for solana-test-validator..."
+          for i in $(seq 1 45); do
+            if solana cluster-version --url http://127.0.0.1:8899 >/dev/null 2>&1; then
+              echo "Validator ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+
+          solana cluster-version --url http://127.0.0.1:8899
+          node scripts/e2e_localnet.mjs
+
   deploy-pages:
+    name: Deploy Interactive Web Arena (GitHub Pages)
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -32,17 +123,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
-  rust-check:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-      - name: Cargo check & unit tests
-        run: |
-          cargo check --manifest-path programs/blitz-vault/Cargo.toml
-          cargo test --manifest-path programs/blitz-vault/Cargo.toml --lib
