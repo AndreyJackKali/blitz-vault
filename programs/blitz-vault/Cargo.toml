@@ -20,6 +20,6 @@ custom-panic = []
 anchor-debug = []
 
 [dependencies]
-anchor-lang = { version = "=1.0.2", features = ["init-if-needed"] }
+anchor-lang = "=1.0.2"
 # Pin 0.18.0: supports both validator 1.x & 2.0 public ERs and compiles #[vrf] cleanly with Anchor 1.0.2
 ephemeral-rollups-sdk = { version = "=0.18.0", features = ["anchor", "vrf"] }

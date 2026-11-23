@@ -479,7 +479,7 @@ impl ArenaState {
 #[derive(Accounts)]
 pub struct InitializeArena<'info> {
     #[account(
-        init_if_needed,
+        init,
         payer = player,
         space = 8 + ArenaState::INIT_SPACE,
         seeds = [ARENA_SEED, player.key().as_ref()],
@@ -498,7 +498,7 @@ pub struct DelegateArena<'info> {
     pub payer: Signer<'info>,
     /// CHECK: The ArenaState PDA to delegate to MagicBlock ER (UncheckedAccount required in SDK >=0.17.1)
     #[account(mut, del, seeds = [ARENA_SEED, payer.key().as_ref()], bump)]
-    pub arena: AccountInfo<'info>,
+    pub arena: UncheckedAccount<'info>,
 }
 
 #[vrf]
@@ -586,4 +586,57 @@ pub enum BlitzError {
     VrfNotExpiredYet,
     #[msg("Arithmetic overflow")]
     MathOverflow,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn crash_point_bounds_and_instant_crash() {
+        let zero = [0u8; 32];
+        assert_eq!(derive_crash_point_bps(&zero), 10_000);
+
+        for i in 1u8..=200 {
+            let mut seed = [0u8; 32];
+            seed[0] = i;
+            seed[4] = i.wrapping_mul(37);
+            seed[5] = i.wrapping_mul(113);
+            let m = derive_crash_point_bps(&seed);
+            assert!(
+                m == 10_000 || (10_500..=500_000).contains(&m),
+                "unexpected crash multiplier: {m}"
+            );
+        }
+    }
+
+    #[test]
+    fn relic_boost_scales_and_caps() {
+        let mut arena = ArenaState {
+            player: Pubkey::default(),
+            chips: STARTING_CHIPS,
+            shards: 0,
+            round_nonce: 0,
+            phase: 0,
+            pending_vrf_kind: 0,
+            active_stake: 0,
+            crash_point_bps: 0,
+            last_cashout_bps: 0,
+            last_vrf_request_ts: 0,
+            win_streak: 0,
+            best_streak: 0,
+            rounds_played: 0,
+            total_pnl: 0,
+            relics_common: 2,
+            relics_rare: 1,
+            relics_epic: 1,
+            relics_mythic: 0,
+            last_relic_tier: 0,
+            last_vrf_hash: [0u8; 32],
+            bump: 0,
+        };
+        assert_eq!(arena.relic_boost_bps(), 1_100);
+        arena.relics_mythic = 5;
+        assert_eq!(arena.relic_boost_bps(), MAX_RELIC_BOOST_BPS);
+    }
 }

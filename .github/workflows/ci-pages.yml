@@ -42,5 +42,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
-      - name: Cargo check (host sanity)
-        run: cargo check --manifest-path programs/blitz-vault/Cargo.toml
+      - name: Cargo check & unit tests
+        run: |
+          cargo check --manifest-path programs/blitz-vault/Cargo.toml
+          cargo test --manifest-path programs/blitz-vault/Cargo.toml --lib
