@@ -89,6 +89,7 @@ jobs:
             --reset \
             --quiet \
             --bpf-program BLzVt11111111111111111111111111111111111111 target/deploy/blitz_vault.so \
+            --bpf-program Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz target/deploy/blitz_vault.so \
             --ledger /tmp/blitz-ledger > /tmp/validator.log 2>&1 &
           VALIDATOR_PID=$!
           trap "kill $VALIDATOR_PID 2>/dev/null || true" EXIT
