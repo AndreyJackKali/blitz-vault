@@ -2,19 +2,20 @@
 /**
  * BlitzVault — 1-Command Solana Devnet + MagicBlock ER Proof-of-Work Script
  *
- * Executes the full Entertainment Finance lifecycle against a deployed BlitzVault
+ * Executes the full Entertainment Finance lifecycle against the deployed BlitzVault
  * program on Solana Devnet + live MagicBlock Ephemeral Rollups & Scoped VRF:
  *   1. Discover live ER validator route via https://devnet-router.magicblock.app (getRoutes)
- *   2. L1: initialize_arena()
+ *   2. L1: initialize_arena() -> 148-byte ArenaState PDA (10,000 chips, 150 shards)
  *   3. L1: delegate_arena(validator = selected ER validator in remaining_accounts[0])
  *   4. ER: start_round(stake=500) -> MagicBlock DEFAULT_EPHEMERAL_QUEUE VRF
  *   5. ER: wait for scoped #[vrf_callback] callback_round_vrf() -> Live
  *   6. ER: cashout_round(11_000 bps / 1.10x) -> 0-gas settlement
- *   7. ER: open_relic_pack() -> wait for callback_relic_vrf()
- *   8. ER: commit_arena() & undelegate_arena() -> atomic L1 settlement via MagicIntentBundleBuilder
+ *   7. ER: open_relic_pack() -> burn 100 shards -> wait for callback_relic_vrf() -> Relic minted
+ *   8. ER: commit_arena() -> checkpoint to L1 via MagicIntentBundleBuilder
+ *   9. ER: undelegate_arena() -> atomic commit & undelegate back to Solana L1 + verify L1 state
  *
  * Usage:
- *   BLITZ_PROGRAM_ID=<DEPLOYED_PROGRAM_ID> KEYPAIR_PATH=~/.config/solana/id.json node scripts/devnet_pow.mjs
+ *   BLITZ_PROGRAM_ID=J22SmyEnav4VNywHCBacqWbN5ZYGzJY5Xegiy54xLfqU KEYPAIR_PATH=~/.config/solana/id.json node scripts/devnet_pow.mjs
  */
 
 import fs from "node:fs";
@@ -69,7 +70,9 @@ async function discoverErRoute(preferredCountry = process.env.ER_REGION || "SGP"
   const routes = json.result || [];
   if (!routes.length) throw new Error(`No routes returned by ${ROUTER_RPC}`);
   return (
-    routes.find((r) => r.countryCode === preferredCountry && !r.fqdn.includes("tee")) || routes[0]
+    routes.find((r) => r.countryCode === preferredCountry && !r.fqdn.includes("tee")) ||
+    routes.find((r) => !r.fqdn.includes("tee")) ||
+    routes[0]
   );
 }
 
@@ -83,21 +86,85 @@ function loadKeypair() {
   return Keypair.fromSecretKey(Uint8Array.from(secret));
 }
 
-function readPhaseAndCrash(data) {
+function parseArenaState(data) {
+  let off = 8;
+  const player = new PublicKey(data.subarray(off, off + 32)).toBase58(); off += 32;
+  const chips = Number(data.readBigUInt64LE(off)); off += 8;
+  const shards = Number(data.readBigUInt64LE(off)); off += 8;
+  const roundNonce = Number(data.readBigUInt64LE(off)); off += 8;
+  const phase = data.readUInt8(off); off += 1;
+  const pendingVrfKind = data.readUInt8(off); off += 1;
+  const activeStake = Number(data.readBigUInt64LE(off)); off += 8;
+  const crashPointBps = data.readUInt32LE(off); off += 4;
+  const lastCashoutBps = data.readUInt32LE(off); off += 4;
+  const lastVrfRequestTs = Number(data.readBigInt64LE(off)); off += 8;
+  const winStreak = data.readUInt16LE(off); off += 2;
+  const bestStreak = data.readUInt16LE(off); off += 2;
+  const roundsPlayed = data.readUInt32LE(off); off += 4;
+  const totalPnl = Number(data.readBigInt64LE(off)); off += 8;
+  const relicsCommon = data.readUInt16LE(off); off += 2;
+  const relicsRare = data.readUInt16LE(off); off += 2;
+  const relicsEpic = data.readUInt16LE(off); off += 2;
+  const relicsMythic = data.readUInt16LE(off); off += 2;
+  const lastRelicTier = data.readUInt8(off); off += 1;
+  const lastVrfHash = data.subarray(off, off + 32).toString("hex"); off += 32;
+  const bump = data.readUInt8(off); off += 1;
   return {
-    chips: Number(data.readBigUInt64LE(8 + 32)),
-    shards: Number(data.readBigUInt64LE(8 + 40)),
-    roundNonce: Number(data.readBigUInt64LE(8 + 48)),
-    phase: data.readUInt8(8 + 56),
-    crashPointBps: data.readUInt32LE(8 + 66),
+    player,
+    chips,
+    shards,
+    roundNonce,
+    phase,
+    pendingVrfKind,
+    activeStake,
+    crashPointBps,
+    lastCashoutBps,
+    lastVrfRequestTs,
+    winStreak,
+    bestStreak,
+    roundsPlayed,
+    totalPnl,
+    relicsCommon,
+    relicsRare,
+    relicsEpic,
+    relicsMythic,
+    totalRelics: relicsCommon + relicsRare + relicsEpic + relicsMythic,
+    lastRelicTier,
+    lastVrfHash,
+    bump,
   };
+}
+
+async function sendErTx(er, ix, payer) {
+  const { blockhash, lastValidBlockHeight } = await er.getLatestBlockhash("confirmed");
+  const tx = new Transaction({ recentBlockhash: blockhash, feePayer: payer.publicKey }).add(ix);
+  tx.sign(payer);
+  const sig = await er.sendRawTransaction(tx.serialize(), { skipPreflight: true });
+  await er.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
+  return sig;
 }
 
 async function main() {
   console.log("=== BlitzVault Solana Devnet + MagicBlock ER Proof-of-Work ===");
+  const report = {
+    timestampUtc: new Date().toISOString(),
+    programId: PROGRAM_ID.toBase58(),
+    programExplorer: explorerAddr(PROGRAM_ID.toBase58()),
+    l1Rpc: L1_RPC,
+    routerRpc: ROUTER_RPC,
+    txs: {},
+  };
+
   const route = await discoverErRoute();
   const erUrl = route.fqdn.replace(/\/$/, "");
   const erValidator = new PublicKey(route.identity);
+  report.erRoute = {
+    countryCode: route.countryCode,
+    fqdn: erUrl,
+    validator: erValidator.toBase58(),
+    blockTimeMs: route.blockTimeMs,
+    baseFee: route.baseFee,
+  };
   console.log(
     `ER Route Selected: ${route.countryCode} · ${erUrl} (validator=${erValidator.toBase58()}, ${route.blockTimeMs}ms, baseFee=${route.baseFee})`
   );
@@ -107,19 +174,15 @@ async function main() {
 
   const progInfo = await l1.getAccountInfo(PROGRAM_ID);
   if (!progInfo || !progInfo.executable) {
-    console.error(`\nProgram ${PROGRAM_ID.toBase58()} is not yet deployed on Solana Devnet.`);
-    console.error("1. Fund your deployer wallet (~2.5 SOL) at https://faucet.solana.com");
-    console.error(
-      "2. Deploy: solana program deploy target/deploy/blitz_vault.so --url devnet --max-len 400000"
-    );
-    console.error("3. Re-run: BLITZ_PROGRAM_ID=<PROGRAM_ID> node scripts/devnet_pow.mjs");
-    process.exit(1);
+    throw new Error(`Program ${PROGRAM_ID.toBase58()} is not deployed/executable on Solana Devnet.`);
   }
   console.log(`Program Verified On Devnet: ${explorerAddr(PROGRAM_ID.toBase58())}`);
 
   const payer = loadKeypair();
   const bal = await l1.getBalance(payer.publicKey);
-  console.log(`Player Wallet: ${payer.publicKey.toBase58()} (${(bal / 1e9).toFixed(4)} Devnet SOL)`);
+  report.player = payer.publicKey.toBase58();
+  report.balanceBeforeLamports = bal;
+  console.log(`Player Wallet: ${payer.publicKey.toBase58()} (${(bal / 1e9).toFixed(6)} Devnet SOL)`);
   if (bal < 50_000_000) {
     throw new Error("Need at least 0.05 Devnet SOL in payer wallet to pay L1 rent/fees.");
   }
@@ -141,6 +204,8 @@ async function main() {
     [Buffer.from("delegation-metadata"), arenaPda.toBuffer()],
     DELEGATION_PROGRAM_ID
   );
+  report.arenaPda = arenaPda.toBase58();
+  report.arenaExplorer = explorerAddr(arenaPda.toBase58());
   console.log(`ArenaState PDA: ${explorerAddr(arenaPda.toBase58())}`);
 
   // Step 1: Initialize Arena on L1 if not already initialized
@@ -156,9 +221,10 @@ async function main() {
       data: disc("initialize_arena"),
     });
     const sig = await sendAndConfirmTransaction(l1, new Transaction().add(initIx), [payer]);
-    console.log(`[1/6] initialize_arena (L1): ${explorerTx(sig)}`);
+    report.txs.initialize_arena = { layer: "L1", sig, explorer: explorerTx(sig) };
+    console.log(`[1/8] initialize_arena (L1): ${explorerTx(sig)}`);
   } else {
-    console.log("[1/6] initialize_arena skipped (PDA already exists on Devnet)");
+    console.log("[1/8] initialize_arena skipped (PDA already exists on Devnet)");
   }
 
   // Step 2: Delegate ArenaState PDA to MagicBlock ER
@@ -180,10 +246,17 @@ async function main() {
       data: disc("delegate_arena"),
     });
     const sig = await sendAndConfirmTransaction(l1, new Transaction().add(delIx), [payer]);
-    console.log(`[2/6] delegate_arena (L1 -> ER): ${explorerTx(sig)}`);
-    await sleep(3000);
+    report.txs.delegate_arena = { layer: "L1", sig, explorer: explorerTx(sig) };
+    console.log(`[2/8] delegate_arena (L1 -> ER): ${explorerTx(sig)}`);
+
+    // Wait for ER validator to ingest the delegated ArenaState PDA
+    for (let i = 0; i < 20; i++) {
+      await sleep(1000);
+      const erInfo = await er.getAccountInfo(arenaPda);
+      if (erInfo && erInfo.data.length >= 148) break;
+    }
   } else {
-    console.log("[2/6] delegate_arena skipped (PDA already delegated to ER)");
+    console.log("[2/8] delegate_arena skipped (PDA already delegated to ER)");
   }
 
   // Step 3: Start VRF Round inside MagicBlock ER (0 gas, fee-exempt DEFAULT_EPHEMERAL_QUEUE)
@@ -200,29 +273,36 @@ async function main() {
     ],
     data: Buffer.concat([disc("start_round"), u64Le(500), Buffer.from([42])]),
   });
-  const startSig = await sendAndConfirmTransaction(er, new Transaction().add(startIx), [payer], {
-    skipPreflight: true,
-  });
-  console.log(`[3/6] start_round VRF request (ER): ${startSig}`);
+  const startSig = await sendErTx(er, startIx, payer);
+  report.txs.start_round = { layer: "ER", sig: startSig, erRpc: erUrl };
+  console.log(`[3/8] start_round VRF request (ER, 0-gas): ${startSig}`);
 
   // Wait for scoped #[vrf_callback] fulfillment inside ER
   let state;
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < 35; i++) {
     const info = await er.getAccountInfo(arenaPda);
-    if (info) {
-      state = readPhaseAndCrash(info.data);
+    if (info && info.data.length >= 148) {
+      state = parseArenaState(info.data);
       if (state.phase === 2) break;
     }
     await sleep(1000);
   }
   if (!state || state.phase !== 2) {
-    throw new Error("Timed out waiting for callback_round_vrf inside ER");
+    throw new Error(`Timed out waiting for callback_round_vrf inside ER (phase=${state?.phase})`);
   }
+  const erSigsAfterRoundVrf = await er.getSignaturesForAddress(arenaPda, { limit: 5 });
+  const roundCbSig = erSigsAfterRoundVrf.find((s) => s.signature !== startSig)?.signature || null;
+  report.txs.callback_round_vrf = {
+    layer: "ER",
+    sig: roundCbSig,
+    crashPointBps: state.crashPointBps,
+    vrfHash: state.lastVrfHash,
+  };
   console.log(
-    `[4/6] callback_round_vrf fulfilled on ER: crash_point=${(state.crashPointBps / 10000).toFixed(2)}x`
+    `[4/8] callback_round_vrf fulfilled on ER: crash_point=${(state.crashPointBps / 10000).toFixed(2)}x (cbSig=${roundCbSig})`
   );
 
-  // Step 4: Cashout inside ER
+  // Step 4: Cashout inside ER (1.10x target)
   const cashoutIx = new TransactionInstruction({
     programId: PROGRAM_ID,
     keys: [
@@ -231,12 +311,87 @@ async function main() {
     ],
     data: Buffer.concat([disc("cashout_round"), u32Le(11_000)]),
   });
-  const cashSig = await sendAndConfirmTransaction(er, new Transaction().add(cashoutIx), [payer], {
-    skipPreflight: true,
-  });
-  console.log(`[5/6] cashout_round 1.10x (ER, 0-gas): ${cashSig}`);
+  const cashSig = await sendErTx(er, cashoutIx, payer);
+  const afterCashInfo = await er.getAccountInfo(arenaPda);
+  const afterCash = parseArenaState(afterCashInfo.data);
+  report.txs.cashout_round = {
+    layer: "ER",
+    sig: cashSig,
+    targetBps: 11_000,
+    chipsAfter: afterCash.chips,
+    shardsAfter: afterCash.shards,
+    winStreak: afterCash.winStreak,
+  };
+  console.log(
+    `[5/8] cashout_round 1.10x (ER, 0-gas): ${cashSig} -> chips=${afterCash.chips}, shards=${afterCash.shards}, streak=${afterCash.winStreak}`
+  );
 
-  // Step 5: Commit & Undelegate back to Solana L1 via MagicIntentBundleBuilder
+  // Step 5: Open VRF Relic Pack inside ER (burns 100 shards -> mints Common/Rare/Epic/Mythic Relic)
+  if (afterCash.shards >= 100) {
+    const relicsBefore = afterCash.totalRelics;
+    const packIx = new TransactionInstruction({
+      programId: PROGRAM_ID,
+      keys: [
+        { pubkey: payer.publicKey, isSigner: true, isWritable: true },
+        { pubkey: arenaPda, isSigner: false, isWritable: true },
+        { pubkey: DEFAULT_EPHEMERAL_QUEUE, isSigner: false, isWritable: true },
+        { pubkey: programIdentity, isSigner: false, isWritable: false },
+        { pubkey: VRF_PROGRAM_ID, isSigner: false, isWritable: false },
+        { pubkey: SLOT_HASHES_SYSVAR, isSigner: false, isWritable: false },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ],
+      data: Buffer.concat([disc("open_relic_pack"), Buffer.from([99])]),
+    });
+    const packSig = await sendErTx(er, packIx, payer);
+    report.txs.open_relic_pack = { layer: "ER", sig: packSig, erRpc: erUrl };
+    console.log(`[6/8] open_relic_pack VRF request (ER, 0-gas): ${packSig}`);
+
+    let afterRelic;
+    for (let i = 0; i < 35; i++) {
+      const info = await er.getAccountInfo(arenaPda);
+      if (info && info.data.length >= 148) {
+        const s = parseArenaState(info.data);
+        if (s.phase === 0 && s.totalRelics > relicsBefore) {
+          afterRelic = s;
+          break;
+        }
+      }
+      await sleep(1000);
+    }
+    if (!afterRelic) {
+      throw new Error("Timed out waiting for callback_relic_vrf inside ER");
+    }
+    const erSigsAfterRelic = await er.getSignaturesForAddress(arenaPda, { limit: 5 });
+    const relicCbSig = erSigsAfterRelic.find((s) => s.signature !== packSig)?.signature || null;
+    report.txs.callback_relic_vrf = {
+      layer: "ER",
+      sig: relicCbSig,
+      lastRelicTier: afterRelic.lastRelicTier,
+      totalRelics: afterRelic.totalRelics,
+      vrfHash: afterRelic.lastVrfHash,
+    };
+    console.log(
+      `      callback_relic_vrf fulfilled on ER: tier=${afterRelic.lastRelicTier}, totalRelics=${afterRelic.totalRelics} (cbSig=${relicCbSig})`
+    );
+  }
+
+  // Step 6: Checkpoint state to L1 while staying delegated (commit_arena)
+  const commitIx = new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [
+      { pubkey: payer.publicKey, isSigner: true, isWritable: true },
+      { pubkey: arenaPda, isSigner: false, isWritable: true },
+      { pubkey: MAGIC_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: MAGIC_CONTEXT_ID, isSigner: false, isWritable: true },
+    ],
+    data: disc("commit_arena"),
+  });
+  const commitSig = await sendErTx(er, commitIx, payer);
+  report.txs.commit_arena = { layer: "ER", sig: commitSig };
+  console.log(`[7/8] commit_arena checkpoint (ER -> L1): ${commitSig}`);
+  await sleep(2000);
+
+  // Step 7: Commit & Undelegate back to Solana L1 via MagicIntentBundleBuilder
   const undelIx = new TransactionInstruction({
     programId: PROGRAM_ID,
     keys: [
@@ -247,14 +402,56 @@ async function main() {
     ],
     data: disc("undelegate_arena"),
   });
-  const undelSig = await sendAndConfirmTransaction(er, new Transaction().add(undelIx), [payer], {
-    skipPreflight: true,
-  });
-  console.log(`[6/6] undelegate_arena (ER -> L1): ${undelSig}`);
+  const undelSig = await sendErTx(er, undelIx, payer);
+  report.txs.undelegate_arena = { layer: "ER", sig: undelSig };
+  console.log(`[8/8] undelegate_arena (ER -> L1): ${undelSig}`);
+
+  // Wait for Solana L1 ArenaState PDA ownership to return from Delegation Program to BlitzVault
+  let finalL1State = null;
+  for (let i = 0; i < 30; i++) {
+    await sleep(1500);
+    const info = await l1.getAccountInfo(arenaPda);
+    if (info && info.owner.equals(PROGRAM_ID)) {
+      finalL1State = parseArenaState(info.data);
+      break;
+    }
+  }
+  if (!finalL1State) {
+    throw new Error("Timed out waiting for ArenaState PDA undelegation to settle on Solana L1");
+  }
+
+  // Capture the L1 commit/undelegate settlement signatures for ArenaState PDA
+  const l1PdaSigs = await l1.getSignaturesForAddress(arenaPda, { limit: 10 });
+  report.l1ArenaHistory = l1PdaSigs.map((s) => ({
+    sig: s.signature,
+    slot: s.slot,
+    err: s.err,
+    explorer: explorerTx(s.signature),
+  }));
+  report.finalL1State = finalL1State;
+  report.balanceAfterLamports = await l1.getBalance(payer.publicKey);
+
+  console.log("\n=== FINAL VERIFIED SOLANA DEVNET L1 ARENA STATE ===");
+  console.log(
+    `Owner=${PROGRAM_ID.toBase58()} | chips=${finalL1State.chips} | shards=${finalL1State.shards} | rounds=${finalL1State.roundsPlayed} | relics=${finalL1State.totalRelics} (tier=${finalL1State.lastRelicTier}) | vrfHash=${finalL1State.lastVrfHash.slice(0, 16)}...`
+  );
+  console.log("L1 Arena PDA Settlement TXs:");
+  for (const h of report.l1ArenaHistory) {
+    console.log(`  slot=${h.slot} err=${h.err} ${h.explorer}`);
+  }
+  console.log(
+    `Remaining Deployer Balance: ${(report.balanceAfterLamports / 1e9).toFixed(6)} Devnet SOL`
+  );
+
+  if (process.env.POW_JSON_OUT) {
+    fs.writeFileSync(process.env.POW_JSON_OUT, JSON.stringify(report, null, 2));
+    console.log(`Saved JSON proof report to ${process.env.POW_JSON_OUT}`);
+  }
   console.log("\n=== FULL DEVNET + MAGICBLOCK ER PROOF-OF-WORK COMPLETE ===");
 }
 
 main().catch((err) => {
   console.error("Devnet PoW error:", err.message || err);
+  if (err.logs) console.error("Program logs:", err.logs);
   process.exit(1);
 });
