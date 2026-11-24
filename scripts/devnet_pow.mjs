@@ -34,7 +34,7 @@ import {
 const L1_RPC = process.env.SOLANA_DEVNET_RPC || "https://api.devnet.solana.com";
 const ROUTER_RPC = process.env.MAGICBLOCK_ROUTER_RPC || "https://devnet-router.magicblock.app";
 const PROGRAM_ID = new PublicKey(
-  process.env.BLITZ_PROGRAM_ID || "BLzVt11111111111111111111111111111111111111"
+  process.env.BLITZ_PROGRAM_ID || "J22SmyEnav4VNywHCBacqWbN5ZYGzJY5Xegiy54xLfqU"
 );
 const DELEGATION_PROGRAM_ID = new PublicKey("DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh");
 const MAGIC_PROGRAM_ID = new PublicKey("Magic11111111111111111111111111111111111111");

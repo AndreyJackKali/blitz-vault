@@ -6,10 +6,10 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-blitz_vault = "BLzVt11111111111111111111111111111111111111"
+blitz_vault = "J22SmyEnav4VNywHCBacqWbN5ZYGzJY5Xegiy54xLfqU"
 
 [programs.localnet]
-blitz_vault = "BLzVt11111111111111111111111111111111111111"
+blitz_vault = "J22SmyEnav4VNywHCBacqWbN5ZYGzJY5Xegiy54xLfqU"
 
 [registry]
 url = "https://api.apr.dev"

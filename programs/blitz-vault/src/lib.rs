@@ -11,8 +11,8 @@ use ephemeral_rollups_sdk::{
     },
 };
 
-// Replaced with real deployed Devnet program keypair during `anchor keys sync`
-declare_id!("BLzVt11111111111111111111111111111111111111");
+// Live Solana Devnet program ID
+declare_id!("J22SmyEnav4VNywHCBacqWbN5ZYGzJY5Xegiy54xLfqU");
 
 /// Scoped VRF requester identity PDA derived at compile time (MagicBlock SDK 0.18+).
 pub const PROGRAM_IDENTITY: Pubkey = program_identity_pubkey(&crate::ID);

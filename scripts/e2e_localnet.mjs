@@ -11,7 +11,7 @@ import {
 } from "@solana/web3.js";
 
 const RPC_URL = process.env.SOLANA_RPC_URL || "http://127.0.0.1:8899";
-const PROGRAM_ID = new PublicKey("BLzVt11111111111111111111111111111111111111");
+const PROGRAM_ID = new PublicKey("J22SmyEnav4VNywHCBacqWbN5ZYGzJY5Xegiy54xLfqU");
 const DELEGATION_PROGRAM_ID = new PublicKey("DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh");
 const DEFAULT_EPHEMERAL_QUEUE = new PublicKey("5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc");
 const ARENA_SEED = Buffer.from("blitz_arena_v1");
