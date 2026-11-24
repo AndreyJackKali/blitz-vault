@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BlitzVault — Pitch Deck (Solana Blitz v10 · MagicBlock ER)</title>
+  <style>
+    :root {
+      --bg: #050811;
+      --panel: #0c1428;
+      --panel2: #111d38;
+      --border: rgba(99, 132, 255, 0.28);
+      --text: #eef4ff;
+      --muted: #93a4c7;
+      --neon: #00ff94;
+      --cyan: #38bdf8;
+      --purple: #c084fc;
+      --gold: #fbbf24;
+      --danger: #ff3b6b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background:
+        radial-gradient(ellipse 70% 45% at 15% 0%, rgba(46, 91, 255, 0.22), transparent 65%),
+        radial-gradient(ellipse 60% 45% at 88% 12%, rgba(0, 255, 148, 0.12), transparent 60%),
+        var(--bg);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+      padding: 13px 26px; border-bottom: 1px solid var(--border);
+      background: rgba(5, 8, 17, 0.9); backdrop-filter: blur(8px);
+    }
+    .brand { display: flex; align-items: center; gap: 11px; font-weight: 800; font-size: 16px; }
+    .logo {
+      width: 34px; height: 34px; border-radius: 10px;
+      background: linear-gradient(135deg, #2e5bff 0%, #00ff94 100%);
+      color: #050814; display: grid; place-items: center; font-weight: 900; font-size: 17px;
+      box-shadow: 0 0 18px rgba(0, 255, 148, 0.28);
+    }
+    .badge {
+      font-family: ui-monospace, monospace; font-size: 11px; font-weight: 700;
+      padding: 3px 9px; border-radius: 999px;
+      border: 1px solid rgba(0, 255, 148, 0.38);
+      background: rgba(0, 255, 148, 0.12); color: var(--neon);
+    }
+    .nav-links { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12px; font-family: ui-monospace, monospace; }
+    .nav-links a {
+      color: var(--cyan); text-decoration: none;
+      padding: 6px 11px; border-radius: 8px; border: 1px solid rgba(56, 189, 248, 0.35);
+      background: rgba(56, 189, 248, 0.08); font-weight: 600;
+    }
+    .nav-links a.primary {
+      color: #04120c; background: linear-gradient(135deg, #00d97e, #00ff94);
+      border-color: transparent;
+    }
+    .nav-links a:hover { opacity: 0.9; }
+    main {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      padding: 22px 26px;
+    }
+    .slide {
+      display: none; width: 100%; max-width: 1160px; min-height: 515px;
+      background: linear-gradient(180deg, rgba(14, 22, 44, 0.95), rgba(8, 13, 27, 0.97));
+      border: 1px solid var(--border); border-radius: 18px;
+      padding: 30px 42px; box-shadow: 0 24px 80px rgba(0, 0, 0, 0.58);
+      flex-direction: column; justify-content: space-between;
+    }
+    .slide.active { display: flex; }
+    .eyebrow {
+      font-family: ui-monospace, monospace; font-size: 12px; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--neon); margin-bottom: 10px;
+    }
+    h1 { font-size: 42px; line-height: 1.12; letter-spacing: -0.02em; margin-bottom: 14px; }
+    h2 { font-size: 30px; line-height: 1.18; letter-spacing: -0.02em; margin-bottom: 14px; }
+    p.lead { font-size: 17px; line-height: 1.55; color: var(--muted); max-width: 900px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 20px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 20px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 20px; }
+    @media (max-width: 860px) {
+      .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+      .slide { padding: 24px; }
+      h1 { font-size: 30px; }
+    }
+    .card {
+      background: rgba(6, 10, 22, 0.86); border: 1px solid var(--border);
+      border-radius: 12px; padding: 18px;
+    }
+    .card h3 { font-size: 14px; color: var(--neon); margin-bottom: 8px; font-family: ui-monospace, monospace; }
+    .card h3.cyan { color: var(--cyan); }
+    .card h3.gold { color: var(--gold); }
+    .card h3.purple { color: var(--purple); }
+    .card p, .card li { font-size: 13.5px; line-height: 1.5; color: #cbd5e1; }
+    .card ul { padding-left: 18px; display: flex; flex-direction: column; gap: 5px; }
+    .kpi { font-family: ui-monospace, monospace; font-size: 28px; font-weight: 800; color: var(--neon); margin-bottom: 4px; }
+    .kpi.cyan { color: var(--cyan); }
+    .kpi.gold { color: var(--gold); }
+    .kpi.purple { color: var(--purple); }
+    .kpi-lbl { font-size: 12px; color: var(--muted); }
+    table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 12.5px; }
+    th, td { text-align: left; padding: 8px 11px; border-bottom: 1px solid rgba(99, 132, 255, 0.2); }
+    th { color: var(--cyan); font-family: ui-monospace, monospace; font-size: 11px; text-transform: uppercase; }
+    td code, p code, li code {
+      font-family: ui-monospace, monospace; font-size: 12px;
+      background: rgba(56, 189, 248, 0.1); color: #bae6fd;
+      padding: 1px 5px; border-radius: 4px;
+    }
+    .pill-row { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 18px; }
+    .pill {
+      font-family: ui-monospace, monospace; font-size: 11.5px;
+      padding: 6px 11px; border-radius: 8px;
+      background: var(--panel2); border: 1px solid var(--border); color: var(--text);
+    }
+    .code-box {
+      background: #040710; border: 1px solid var(--border); border-radius: 10px;
+      padding: 14px 16px; font-family: ui-monospace, monospace; font-size: 12px;
+      color: #a7f3d0; line-height: 1.6; overflow-x: auto; margin-top: 14px;
+    }
+    .slide-foot {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-top: 22px; padding-top: 14px; border-top: 1px solid rgba(99, 132, 255, 0.2);
+      font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--muted);
+    }
+    footer {
+      display: flex; justify-content: center; align-items: center; gap: 16px;
+      padding: 12px 24px; border-top: 1px solid var(--border);
+      background: rgba(5, 8, 17, 0.92);
+    }
+    button.ctrl {
+      background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+      padding: 8px 18px; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 13px;
+    }
+    button.ctrl:hover { border-color: var(--neon); color: var(--neon); }
+    .dots { display: flex; gap: 8px; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: #26354d; cursor: pointer; border: none; }
+    .dot.active { background: var(--neon); width: 26px; border-radius: 5px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="logo">⚡</div>
+      <span>BlitzVault</span>
+      <span class="badge">SOLANA BLITZ v10 · ENTERTAINMENT FINANCE</span>
+    </div>
+    <div class="nav-links">
+      <a class="primary" href="./">🎮 Live Arena</a>
+      <a href="./demo.mp4">🎬 69s Narrated Demo</a>
+      <a href="https://explorer.solana.com/address/J22SmyEnav4VNywHCBacqWbN5ZYGzJY5Xegiy54xLfqU?cluster=devnet" target="_blank" rel="noopener">🔍 Devnet Program</a>
+      <a href="https://github.com/AndreyJackKali/blitz-vault" target="_blank" rel="noopener">📦 GitHub</a>
+    </div>
+  </header>
+
+  <main>
+    <!-- SLIDE 1: COVER -->
+    <section class="slide active" data-slide="1">
+      <div>
+        <div class="eyebrow">01 / 08 · SOLANA BLITZ v10 SUBMISSION · LIVE ON DEVNET + MAGICBLOCK ER</div>
+        <h1>BlitzVault: Sub-50ms Zero-Gas Entertainment Finance on MagicBlock ER</h1>
+        <p class="lead">
+          Fusing reflex-speed on-chain Crash Multiplier speculation with provably fair Scoped VRF Collectible Relic Packs
+          that permanently compound future yield — deployed live on Solana Devnet with 12/12 finalized L1 + ER transactions.
+        </p>
+        <div class="grid-4">
+          <div class="card">
+            <div class="kpi">12 / 12</div>
+            <div class="kpi-lbl">Finalized Live Devnet L1 + MagicBlock ER Transactions (err: null)</div>
+          </div>
+          <div class="card">
+            <div class="kpi cyan">0 Gas</div>
+            <div class="kpi-lbl">All 7 ER Gameplay, VRF Callback &amp; Relic Mint TXs (fee = 0)</div>
+          </div>
+          <div class="card">
+            <div class="kpi gold">20–70ms</div>
+            <div class="kpi-lbl">Live Scoped VRF Oracle Callbacks on SGP ER (3,659–3,925 CU)</div>
+          </div>
+          <div class="card">
+            <div class="kpi purple">24 / 24</div>
+            <div class="kpi-lbl">14 Rust Unit Tests + 10 Real solana-test-validator SBF E2E Guards</div>
+          </div>
+        </div>
+        <div class="pill-row">
+          <span class="pill">Program ID: J22SmyEnav4VNywHCBacqWbN5ZYGzJY5Xegiy54xLfqU</span>
+          <span class="pill">ephemeral-rollups-sdk 0.18.0</span>
+          <span class="pill">Anchor 1.0.2</span>
+          <span class="pill">SBF Binary: 326 KiB (SHA-256 verified)</span>
+        </div>
+      </div>
+      <div class="slide-foot">
+        <span>BlitzVault v1.1.0 · Solana Blitz v10: Entertainment Finance</span>
+        <span>Use ← / → or Space to navigate · Slide 1 / 8</span>
+      </div>
+    </section>
+
+    <!-- SLIDE 2: THE PROBLEM -->
+    <section class="slide" data-slide="2">
+      <div>
+        <div class="eyebrow">02 / 08 · THE PROBLEM</div>
+        <h2>Why Base-Layer L1 Breaks High-Frequency Entertainment Finance</h2>
+        <p class="lead">
+          Entertainment Finance thrives on split-second risk/reward loops paired with persistent on-chain progression.
+          Standard blockchains force players to choose between centralized trust or unusable UX.
+        </p>
+        <div class="grid-3">
+          <div class="card">
+            <h3>1. Reflex-Killing Latency</h3>
+            <p>400ms–1.2s L1 confirmation delays make sub-second crash cashouts impossible. Players bust while transactions wait in the mempool.</p>
+          </div>
+          <div class="card">
+            <h3 class="gold">2. Gas &amp; Wallet Friction</h3>
+            <p>Paying priority fees and signing Phantom popups on every bet, cashout, and loot-box roll kills retention inside 60 seconds.</p>
+          </div>
+          <div class="card">
+            <h3 class="purple">3. Opaque Off-Chain RNG</h3>
+            <p>Web2 crash casinos hide house-controlled multipliers on private servers — players cannot cryptographically verify crash points or relic odds.</p>
+          </div>
+        </div>
+        <div class="card" style="margin-top:18px; border-color: rgba(0,255,148,0.4);">
+          <h3>The MagicBlock Ephemeral Rollup Breakthrough</h3>
+          <p>Delegate one compact 148-byte <code>ArenaState</code> PDA from Solana L1 to a regional 10ms MagicBlock ER validator, run unlimited 0-gas turns + fee-exempt Scoped VRF callbacks in real time, then atomically commit &amp; undelegate final wealth and Relics back to L1.</p>
+        </div>
+      </div>
+      <div class="slide-foot">
+        <span>Problem &amp; Market Fit</span>
+        <span>Slide 2 / 8</span>
+      </div>
+    </section>
+
+    <!-- SLIDE 3: THE SOLUTION FLYWHEEL -->
+    <section class="slide" data-slide="3">
+      <div>
+        <div class="eyebrow">03 / 08 · THE SOLUTION · 4-PILLAR ENTERTAINMENT FINANCE LOOP</div>
+        <h2>One Seamless On-Chain Flywheel: Speculate → Earn Shards → Mint Relics → Compound</h2>
+        <div class="grid-2">
+          <div class="card">
+            <h3>01 · Sub-50ms Zero-Gas Crash Arena</h3>
+            <ul>
+              <li>Initialize <code>ArenaState</code> PDA (10,000 starter chips + 150 Vault Shards).</li>
+              <li>Delegate once via <code>#[delegate]</code> to live Magic Router ER validator (SGP / US / EU / TEE).</li>
+              <li><code>start_round</code> &amp; <code>cashout_round</code> settle inside ER with <strong>0 gas</strong> and ~10–50ms speed.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3 class="cyan">02 · Provably Fair Scoped VRF</h3>
+            <ul>
+              <li>Requests domain-separated randomness on fee-exempt <code>DEFAULT_EPHEMERAL_QUEUE</code>.</li>
+              <li><code>#[vrf_callback]</code> deterministically derives heavy-tail crash curve (<code>1.00×–50.00×</code>).</li>
+              <li>125s <code>cancel_stale_vrf</code> safety hatch refunds stake &amp; increments nonce if oracle stalls.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3 class="gold">03 · Collectible VRF Relic Vault (+25% Yield)</h3>
+            <ul>
+              <li>Win streaks award Vault Shards (<code>25 + 10 × streak</code>; +10 consolation on bust).</li>
+              <li>Burn 100 Shards via <code>open_relic_pack</code> + VRF for persistent on-chain Relics:</li>
+              <li><strong>Common</strong> (60%, +1%) · <strong>Rare</strong> (25%, +3%) · <strong>Epic</strong> (12%, +6%) · <strong>Mythic</strong> (3%, +12%).</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3 class="purple">04 · Atomic L1 Checkpoint &amp; Settlement</h3>
+            <ul>
+              <li>Uses non-deprecated SDK 0.18.0 <code>MagicIntentBundleBuilder</code>.</li>
+              <li><code>commit_arena</code> checkpoints state to Solana L1 without leaving the ER.</li>
+              <li><code>undelegate_arena</code> atomically commits &amp; returns full custody of chips and Relics to L1.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="slide-foot">
+        <span>Entertainment Finance Core Loop</span>
+        <span>Slide 3 / 8</span>
+      </div>
+    </section>
+
+    <!-- SLIDE 4: ARCHITECTURE & SDK 0.18.0 -->
+    <section class="slide" data-slide="4">
+      <div>
+        <div class="eyebrow">04 / 08 · MAGICBLOCK ER + VRF ARCHITECTURE</div>
+        <h2>Production-Grade Anchor 1.0.2 + ephemeral-rollups-sdk 0.18.0</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>MagicBlock Primitive</th>
+              <th>Implementation in BlitzVault</th>
+              <th>Verified Metric / Source</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>#[ephemeral]</code> Program</td>
+              <td>Full ER entrypoint compiled with Agave 4.4.1 SBF toolchain</td>
+              <td><code>333,656 B</code> (326 KiB) · <code>lib.rs#L38-L40</code></td>
+            </tr>
+            <tr>
+              <td><code>#[delegate]</code> PDA</td>
+              <td>SIMD-0460 safe <code>UncheckedAccount + del</code> to <code>DELeGGvX…RSaeSh</code></td>
+              <td><code>50,714 CU</code> L1 · Live Magic Router selector</td>
+            </tr>
+            <tr>
+              <td><code>#[vrf]</code> Scoped Requests</td>
+              <td>Domain-separated seeds (<code>0x01</code> Round / <code>0xA5</code> Relic) on <code>5hBR57…FRK5Tc</code></td>
+              <td>0-fee Ephemeral Queue · <code>22.3k–22.5k CU</code></td>
+            </tr>
+            <tr>
+              <td><code>#[vrf_callback]</code> Optimization</td>
+              <td><strong>Compile-time</strong> <code>SCOPED_VRF_IDENTITY</code> avoids >200k CU SBF runtime blowup!</td>
+              <td><strong>3,659 CU</strong> (Round) · <strong>3,925 CU</strong> (Relic)</td>
+            </tr>
+            <tr>
+              <td><code>#[commit]</code> Bundle Builder</td>
+              <td>Zero deprecated APIs: <code>MagicIntentBundleBuilder::commit</code> &amp; <code>commit_and_undelegate</code></td>
+              <td>Pre-exit <code>arena.exit(&amp;crate::ID)?</code></td>
+            </tr>
+            <tr>
+              <td>Live Magic Router</td>
+              <td>Web HUD queries <code>devnet-router.magicblock.app</code> <code>getRoutes</code> live</td>
+              <td>4 regional 10ms validators (SGP/US/EU/TEE)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="slide-foot">
+        <span>Deep MagicBlock SDK 0.18.0 Engineering</span>
+        <span>Slide 4 / 8</span>
+      </div>
+    </section>
+
+    <!-- SLIDE 5: LIVE DEVNET PROOF OF WORK -->
+    <section class="slide" data-slide="5">
+      <div>
+        <div class="eyebrow">05 / 08 · LIVE SOLANA DEVNET + MAGICBLOCK ER PROOF-OF-WORK</div>
+        <h2>12 / 12 Real On-Chain Transactions Finalized (err: null, 2026-11-24 UTC)</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Step</th>
+              <th>Instruction / Oracle Event</th>
+              <th>Cluster</th>
+              <th>Slot</th>
+              <th>CU</th>
+              <th>Fee</th>
+              <th>Verified Signature</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>0</td><td><code>Program Deploy (blitz_vault.so)</code></td><td>Solana L1</td><td>525684732</td><td>2,670</td><td>Rent</td><td><code>Y6f8uc1Q…VChU6Py</code></td></tr>
+            <tr><td>1</td><td><code>initialize_arena</code> (148B PDA)</td><td>Solana L1</td><td>525684830</td><td>14,041</td><td>L1</td><td><code>2Dr9tsWM…4gUyjTr</code></td></tr>
+            <tr><td>2</td><td><code>delegate_arena</code> (L1 → SGP ER)</td><td>Solana L1</td><td>525684839</td><td>50,714</td><td>L1</td><td><code>2BAiBAgS…vyp9n8f8</code></td></tr>
+            <tr><td>3–4</td><td><code>start_round</code> → <code>callback_round_vrf</code> (~70ms)</td><td>MagicBlock ER</td><td>1152216126</td><td>3,659</td><td><strong>0</strong></td><td><code>4Pz9L56a…ozh7e3ZQ</code></td></tr>
+            <tr><td>5</td><td><code>cashout_round</code> (1.10× settlement)</td><td>MagicBlock ER</td><td>1152216284</td><td>5,522</td><td><strong>0</strong></td><td><code>5HgVe3YT…Shu2uAVy</code></td></tr>
+            <tr><td>6a–b</td><td><code>open_relic_pack</code> → <code>callback_relic_vrf</code> (~20ms)</td><td>MagicBlock ER</td><td>1152216432</td><td>3,925</td><td><strong>0</strong></td><td><code>3XkQVBQD…hSZxMz1EN</code></td></tr>
+            <tr><td>7a–b</td><td><code>commit_arena</code> → L1 Checkpoint Relayer</td><td>ER → L1</td><td>525684876</td><td>1,310</td><td><strong>0 ER</strong></td><td><code>65migKLX…kw4ftwKf</code></td></tr>
+            <tr><td>8a–b</td><td><code>undelegate_arena</code> → L1 Final Custody</td><td>ER → L1</td><td>525684888</td><td>65,239</td><td><strong>0 ER</strong></td><td><code>3Aa4g4YF…6UqrjStP</code></td></tr>
+          </tbody>
+        </table>
+        <div class="pill-row">
+          <span class="pill">Final L1 PDA 8y1LEm…XiPF: chips=9,500 · shards=60 · rounds=1 · Common Relic (+1% boost)</span>
+        </div>
+      </div>
+      <div class="slide-foot">
+        <span>100% Real Devnet + Live Scoped VRF Proof</span>
+        <span>Slide 5 / 8</span>
+      </div>
+    </section>
+
+    <!-- SLIDE 6: SECURITY & CI VERIFICATION -->
+    <section class="slide" data-slide="6">
+      <div>
+        <div class="eyebrow">06 / 08 · SECURITY INVARIANTS &amp; 100% GREEN CI</div>
+        <h2>Fail-Closed On-Chain Security Proven in Real BPF VM</h2>
+        <div class="grid-2">
+          <div class="card">
+            <h3>10 / 10 Real solana-test-validator SBF E2E Guards</h3>
+            <ul>
+              <li>Loads actual <code>326 KiB</code> ELF binary into <code>solana-core 4.4.1</code>.</li>
+              <li>Verifies 148-byte <code>ArenaState</code> init + duplicate init rejection.</li>
+              <li>Proves <strong>unauthorized intruder</strong> <code>cashout_round</code> fails (<code>ConstraintSeeds 0x7d6</code>).</li>
+              <li>Proves <strong>spoofed non-oracle VRF callback</strong> fails (<code>ConstraintAddress 0x7dc</code>).</li>
+              <li>Proves <code>RoundNotLive</code>, <code>NoPendingVrf</code>, <code>StakeTooLow</code>, <code>InsufficientChips</code>, and <code>InvalidOracleQueue</code> (both Round &amp; Relic).</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3 class="cyan">14 / 14 Rust Unit &amp; Monte Carlo Invariants</h3>
+            <ul>
+              <li>5,000-sample Monte Carlo verification of crash curve heavy-tail distribution &amp; house edge bounds.</li>
+              <li>Domain separation check: identical seeds in Round vs Relic produce independent VRF outputs.</li>
+              <li>Arithmetic overflow &amp; <code>+25%</code> Relic boost cap invariants.</li>
+              <li>Bit-for-bit Rust ↔ Web HUD parity on <code>derive_crash_point_bps</code> (click any round pill in Arena to verify!).</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="slide-foot">
+        <span>GitHub Actions CI: 3 / 3 Jobs GREEN (Rust · SBF E2E · GitHub Pages)</span>
+        <span>Slide 6 / 8</span>
+      </div>
+    </section>
+
+    <!-- SLIDE 7: ENTERTAINMENT FINANCE BUSINESS MODEL -->
+    <section class="slide" data-slide="7">
+      <div>
+        <div class="eyebrow">07 / 08 · SUSTAINABLE ENTERTAINMENT FINANCE MODEL</div>
+        <h2>Why BlitzVault Retains Players &amp; Scales on Solana Mainnet</h2>
+        <div class="grid-3">
+          <div class="card">
+            <h3>Gasless Onboarding</h3>
+            <p>One L1 delegation unlocks hundreds of 0-gas ER rounds — eliminating the #1 drop-off cliff in Web3 consumer apps while keeping full self-custody.</p>
+          </div>
+          <div class="card">
+            <h3 class="gold">Sticky Meta-Progression</h3>
+            <p>Even losing rounds grant +10 consolation Vault Shards toward VRF Relic Packs. Players build durable +1% to +25% yield-boosting collections they own on L1.</p>
+          </div>
+          <div class="card">
+            <h3 class="purple">Clear Protocol Revenue</h3>
+            <p>Built-in mathematical house edge (~3% crash curve) + seasonal tournament entry pools + secondary Relic marketplace royalties on mainnet L1 settlement.</p>
+          </div>
+        </div>
+        <div class="card" style="margin-top:18px;">
+          <h3 class="cyan">Post-Blitz Roadmap (Mainnet Path)</h3>
+          <p>1) Multiplayer synced ER Crash rooms with live social leaderboards → 2) Tradeable Metaplex Core Relic NFTs committed via ER → 3) TEE Private-Order ER mode (<code>devnet-tee.magicblock.app</code> already integrated in our Magic Router selector!) for sealed high-roller rounds.</p>
+        </div>
+      </div>
+      <div class="slide-foot">
+        <span>Retention, Tokenomics &amp; Mainnet Roadmap</span>
+        <span>Slide 7 / 8</span>
+      </div>
+    </section>
+
+    <!-- SLIDE 8: JUDGE QUICK-START -->
+    <section class="slide" data-slide="8">
+      <div>
+        <div class="eyebrow">08 / 08 · JUDGE QUICK-START &amp; 1-COMMAND VERIFICATION</div>
+        <h2>Try Live in 10 Seconds — Verify Everything On-Chain</h2>
+        <div class="grid-2">
+          <div class="card">
+            <h3>Live Interactive Judge Links</h3>
+            <ul>
+              <li><strong>Interactive Web Arena:</strong> <code>andreyjackkali.github.io/blitz-vault/</code></li>
+              <li><strong>69s Narrated HD Demo:</strong> <code>andreyjackkali.github.io/blitz-vault/demo.mp4</code></li>
+              <li><strong>Solana Devnet Program:</strong> <code>J22SmyEnav4VNywHCBacqWbN5ZYGzJY5Xegiy54xLfqU</code></li>
+              <li><strong>GitHub Repo &amp; CI Proofs:</strong> <code>github.com/AndreyJackKali/blitz-vault</code></li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3 class="gold">30-Second Arena Judge Test</h3>
+            <ul>
+              <li>Open the Live Arena → click <strong>1. Delegate to ER</strong> (auto-probes live Magic Router).</li>
+              <li>Click <strong>2. Start VRF Round</strong> → press <strong>Spacebar</strong> to Cash Out at ~2× with 0 gas.</li>
+              <li>Open a <strong>VRF Relic Pack</strong> (100 Shards) → click any round pill to verify bit-for-bit VRF math → <strong>Commit &amp; Undelegate L1</strong>.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="code-box"># 1. Verify live executable Solana Devnet program
+solana program show J22SmyEnav4VNywHCBacqWbN5ZYGzJY5Xegiy54xLfqU --url https://api.devnet.solana.com
+
+# 2. Run all 14 Rust unit &amp; MagicBlock ER/VRF layout tests locally
+cargo test --manifest-path programs/blitz-vault/Cargo.toml --lib -- --nocapture</div>
+      </div>
+      <div class="slide-foot">
+        <span>BlitzVault v1.1.0 · Built for Solana Blitz v10 (MagicBlock ER)</span>
+        <span>Slide 8 / 8</span>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <button class="ctrl" id="prevBtn">← Prev</button>
+    <div class="dots" id="dots"></div>
+    <button class="ctrl" id="nextBtn">Next →</button>
+  </footer>
+
+  <script>
+    const slides = Array.from(document.querySelectorAll('.slide'));
+    const dotsEl = document.getElementById('dots');
+    let idx = 0;
+
+    function render(n) {
+      idx = (n + slides.length) % slides.length;
+      slides.forEach((s, i) => s.classList.toggle('active', i === idx));
+      Array.from(dotsEl.children).forEach((d, i) => d.classList.toggle('active', i === idx));
+      window.history.replaceState(null, '', '#slide-' + (idx + 1));
+    }
+
+    slides.forEach((_, i) => {
+      const b = document.createElement('button');
+      b.className = 'dot' + (i === 0 ? ' active' : '');
+      b.title = 'Slide ' + (i + 1);
+      b.onclick = () => render(i);
+      dotsEl.appendChild(b);
+    });
+
+    document.getElementById('prevBtn').onclick = () => render(idx - 1);
+    document.getElementById('nextBtn').onclick = () => render(idx + 1);
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); render(idx + 1); }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); render(idx - 1); }
+    });
+
+    const hashMatch = window.location.hash.match(/slide-(\d+)/);
+    if (hashMatch) {
+      const target = parseInt(hashMatch[1], 10) - 1;
+      if (target >= 0 && target < slides.length) render(target);
+    }
+  </script>
+</body>
+</html>

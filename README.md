@@ -4,7 +4,8 @@
 [![Solana Devnet](https://img.shields.io/badge/Solana%20Devnet-LIVE%20J22Smy…LfqU-00ff94?style=flat-square&logo=solana)](https://explorer.solana.com/address/J22SmyEnav4VNywHCBacqWbN5ZYGzJY5Xegiy54xLfqU?cluster=devnet)
 [![CI SBF E2E](https://img.shields.io/badge/CI%20SBF%20E2E-10%2F10%20Passed-00ff94?style=flat-square&logo=githubactions)](https://github.com/AndreyJackKali/blitz-vault/actions/workflows/ci-pages.yml)
 [![Live Arena](https://img.shields.io/badge/Live%20Demo-GitHub%20Pages-00ff94?style=flat-square&logo=solana)](https://andreyjackkali.github.io/blitz-vault/)
-[![Demo Video](https://img.shields.io/badge/HD%20Walkthrough-48s%20MP4-38bdf8?style=flat-square)](https://github.com/AndreyJackKali/blitz-vault/raw/main/docs/demo.mp4)
+[![Pitch Deck](https://img.shields.io/badge/Pitch%20Deck-8%20Slides%20Live-a855f7?style=flat-square)](https://andreyjackkali.github.io/blitz-vault/deck.html)
+[![Demo Video](https://img.shields.io/badge/Narrated%20Walkthrough-69s%20HD%20MP4-38bdf8?style=flat-square)](https://andreyjackkali.github.io/blitz-vault/demo.mp4)
 [![MagicBlock SDK](https://img.shields.io/badge/MagicBlock%20ER%20SDK-0.18.0-7c3aed?style=flat-square)](https://docs.magicblock.gg/)
 [![Anchor](https://img.shields.io/badge/Anchor-1.0.2-3b82f6?style=flat-square)](https://www.anchor-lang.com/)
 
@@ -13,10 +14,11 @@
 
 ---
 
-## 🎬 Live Interactive Demo & 48s HD Walkthrough
+## 🎬 Live Interactive Arena, 8-Slide Pitch Deck & 69s Narrated HD Walkthrough
 
 - **Play Live Now (Zero Setup · Magic Router Live Telemetry + Judge Sandbox / Phantom Devnet):** 👉 **[https://andreyjackkali.github.io/blitz-vault/](https://andreyjackkali.github.io/blitz-vault/)**
-- **Watch 48s HD Walkthrough Video:** 👉 **[`docs/demo.mp4`](https://github.com/AndreyJackKali/blitz-vault/raw/main/docs/demo.mp4)** · **[GitHub Release `v1.0.0-blitz-v10`](https://github.com/AndreyJackKali/blitz-vault/releases/tag/v1.0.0-blitz-v10)**
+- **Open 8-Slide Interactive Pitch Deck:** 👉 **[https://andreyjackkali.github.io/blitz-vault/deck.html](https://andreyjackkali.github.io/blitz-vault/deck.html)**
+- **Watch 69s Narrated HD Walkthrough Video:** 👉 **[https://andreyjackkali.github.io/blitz-vault/demo.mp4](https://andreyjackkali.github.io/blitz-vault/demo.mp4)** · **[`docs/demo.mp4`](https://github.com/AndreyJackKali/blitz-vault/raw/main/docs/demo.mp4)** · **[GitHub Release `v1.0.0-blitz-v10`](https://github.com/AndreyJackKali/blitz-vault/releases/tag/v1.0.0-blitz-v10)**
 - **100% GREEN CI Proof (14 Rust Tests + 326 KiB SBF `.so` + 10/10 Localnet BPF E2E + Live Devnet):** 👉 **[GitHub Actions Workflows](https://github.com/AndreyJackKali/blitz-vault/actions/workflows/ci-pages.yml)** · **[Solana Devnet Program `J22Smy…LfqU`](https://explorer.solana.com/address/J22SmyEnav4VNywHCBacqWbN5ZYGzJY5Xegiy54xLfqU?cluster=devnet)**
 
 [![BlitzVault Live Arena Preview](docs/preview.png)](https://andreyjackkali.github.io/blitz-vault/)
