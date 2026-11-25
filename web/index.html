@@ -222,6 +222,12 @@
     .tag-er { background: rgba(0,255,148,0.16); color: var(--neon); }
     .tag-vrf { background: rgba(168,85,247,0.28); color: #e9d5ff; }
     .tag-l1 { background: rgba(46,91,255,0.28); color: #93c5fd; }
+    .tag-sim { background: rgba(250,204,21,0.18); color: #fde68a; }
+    .proof-strip { margin: 14px 0 4px; padding: 12px 14px; border: 1px solid rgba(0,255,148,0.28); border-radius: 12px; background: rgba(0,255,148,0.05); font-size: 12.5px; line-height: 1.5; color: #cbd5e1; }
+    .proof-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .proof-chip { font-family: inherit; font-size: 11px; padding: 3px 8px; border-radius: 999px; border: 1px solid rgba(147,197,253,0.35); color: #e2e8f0; text-decoration: none; background: rgba(15,23,42,0.6); }
+    .proof-chip:hover { border-color: var(--neon); }
+    .proof-chip b { color: var(--neon); font-weight: 700; margin-right: 2px; }
 
     /* Entertainment Finance Flywheel Strip */
     .enfi-strip {
@@ -321,6 +327,12 @@
         <button id="walletBtn" class="btn-primary">Connect Phantom / Demo</button>
       </div>
     </header>
+
+    <!-- Honest proof strip: what is real on-chain vs. what the arena replays in-browser -->
+    <div class="proof-strip" id="proofStrip">
+      <div class="proof-text"><strong>How to read this demo:</strong> the arena below replays the program's exact crash/relic math in your browser (no wallet, no faucet, instant). Log lines marked <span class="tag tag-sim">SIM</span> are that replay. <strong>The same full loop ran for real on Solana Devnet + MagicBlock ER</strong> — click any step to verify on Explorer:</div>
+      <div class="proof-chips"><a class="proof-chip" href="https://explorer.solana.com/tx/2Dr9tsWMN8D6soxHA1f1h45xzpoDu3wWXuxh55EGNfyuwWLkiXRankpp85buKkHknR2sSx3KrNKgWHUa44gUyjTr?cluster=devnet" target="_blank" rel="noopener"><b>L1</b> initialize_arena ↗</a><a class="proof-chip" href="https://explorer.solana.com/tx/2BAiBAgSkCywkDTkKs6CV1gd5TDYfKrEsLjWydYVNxZJbsV5GV6VS6yhWSppx6u9k9H8weXS2p9MCCaKvyp9n8f8?cluster=devnet" target="_blank" rel="noopener"><b>L1</b> delegate_arena ↗</a><a class="proof-chip" href="https://explorer.solana.com/tx/2Dz7Lsvixpks7qJBva3Qep2Cyd19MD4do4zU92iXu9xfcHY66RCCXw3fSaMvUAF74W6pxBEi7YYFa2MuKzF7Jbvt?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app" target="_blank" rel="noopener"><b>ER</b> start_round ↗</a><a class="proof-chip" href="https://explorer.solana.com/tx/4Pz9L56aGRGtMU75SFCBSsNvUNsPHenUpuRWde2wB9aHevF5V711AgcDwb5a8Ez7rTdXKCMs7cgfE6Mqozh7e3ZQ?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app" target="_blank" rel="noopener"><b>ER</b> callback_round_vrf ↗</a><a class="proof-chip" href="https://explorer.solana.com/tx/5HgVe3YTxaLoLA21WdAgj9cQL2ohF1xjg3bLn6ha8c5apYjt8agSrceLfgF87jxHqfV8sBShPqHEQsYbShu2uAVy?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app" target="_blank" rel="noopener"><b>ER</b> cashout_round ↗</a><a class="proof-chip" href="https://explorer.solana.com/tx/4xSYx4Q32UM66Ex9cZSE4y5NYewUdQMoTbQnq4j3bfeXzGs8DKg8i9EYdbwiQNsuyJN8PLb8bPe74JpJMAvj4Uu2?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app" target="_blank" rel="noopener"><b>ER</b> open_relic_pack ↗</a><a class="proof-chip" href="https://explorer.solana.com/tx/3XkQVBQDaQnbqgEHXz6L6wGinYVSdk5iGvuuSKV6KE3ta9g7132RLMhKYDAZdqf1MQQpH9FsW6nXUpohSZxMz1EN?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app" target="_blank" rel="noopener"><b>ER</b> callback_relic_vrf ↗</a><a class="proof-chip" href="https://explorer.solana.com/tx/b94sM2bkURJkRCjTgJXd2bmbVGFYfHhtFYLh36RUXDvg8oLZcW4MeUx9kvfWRhGTARsZJMANQCey5UxrYbE8yfY?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app" target="_blank" rel="noopener"><b>ER</b> commit_arena ↗</a><a class="proof-chip" href="https://explorer.solana.com/tx/2rthna5rcCdk7gZpQxLM7vdnAucpAsSU9Pxcs1SofKN9yVLaRn9HcchFuDZDvgxqXKSzzY4S44P8BgHTwQW5jTtd?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app" target="_blank" rel="noopener"><b>ER</b> undelegate_arena ↗</a></div>
+    </div>
 
     <!-- 5-Stage MagicBlock ER Lifecycle Stepper -->
     <div class="pipeline">
@@ -642,10 +654,13 @@
       return Math.min(raw, 2500);
     }
 
+    // Lines produced by the in-browser replay (not by live RPC reads) get a SIM badge.
+    const SIM_RE = /^(delegate_arena|Auto-delegated|start_round|callback_round_vrf|cashout_round|BUST|open_relic_pack|commit_arena|undelegate_arena|Judge Sandbox|Starting 1-Click|Judge Auto-Tour)/;
     function addLog(tag, cls, msg) {
       const el = document.createElement('div');
       el.className = 'log-row';
-      el.innerHTML = `<span class="tag ${cls}">${tag}</span>${msg}`;
+      const sim = SIM_RE.test(msg) ? '<span class="tag tag-sim">SIM</span>' : '';
+      el.innerHTML = `<span class="tag ${cls}">${tag}</span>${sim}${msg}`;
       $('txLog').prepend(el);
     }
 
@@ -1204,7 +1219,7 @@
           await new Promise(r => setTimeout(r, 550));
           $('settleBtn').click();
         }
-        addLog('L1', 'tag-l1', 'Judge Auto-Tour complete! All 5 MagicBlock ER + Scoped VRF + L1 Settlement stages verified.');
+        addLog('L1', 'tag-l1', 'Judge Auto-Tour complete: all 5 stages replayed in-browser. Real Devnet + ER signatures for each stage are linked in the strip at the top.');
       } finally {
         tourRunning = false;
         btn.disabled = false;

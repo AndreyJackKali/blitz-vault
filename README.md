@@ -14,6 +14,10 @@
 
 ---
 
+> **Real vs. replay, up front:** the live web arena replays the program's exact crash/relic math in the browser so anyone can play with zero setup (simulated log lines are tagged `SIM`). The full loop itself — `initialize_arena` → `delegate_arena` → `start_round` → VRF callback → `cashout_round` → `open_relic_pack` → relic VRF → `commit_arena` → `undelegate_arena` — was executed on **Solana Devnet + MagicBlock ER**; every signature is linked in [Live Devnet Proof-of-Work](#-live-solana-devnet-deployment--verified-proof-of-work-transactions) below and in the strip at the top of the demo.
+
+---
+
 ## 🎬 Live Interactive Arena, 8-Slide Pitch Deck & 69s Narrated HD Walkthrough
 
 - **Play Live Now (`v1.2.0` · Zero Setup · Live Devnet PDA Inspector + VRF Verifier + 1-Click Judge Auto-Tour + Phantom Devnet):** 👉 **[https://andreyjackkali.github.io/blitz-vault/](https://andreyjackkali.github.io/blitz-vault/)**
