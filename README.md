@@ -16,10 +16,10 @@
 
 ## 🎬 Live Interactive Arena, 8-Slide Pitch Deck & 69s Narrated HD Walkthrough
 
-- **Play Live Now (Zero Setup · Magic Router Live Telemetry + Judge Sandbox / Phantom Devnet):** 👉 **[https://andreyjackkali.github.io/blitz-vault/](https://andreyjackkali.github.io/blitz-vault/)**
+- **Play Live Now (`v1.2.0` · Zero Setup · Live Devnet PDA Inspector + VRF Verifier + 1-Click Judge Auto-Tour + Phantom Devnet):** 👉 **[https://andreyjackkali.github.io/blitz-vault/](https://andreyjackkali.github.io/blitz-vault/)**
 - **Open 8-Slide Interactive Pitch Deck:** 👉 **[https://andreyjackkali.github.io/blitz-vault/deck.html](https://andreyjackkali.github.io/blitz-vault/deck.html)**
-- **Watch 69s Narrated HD Walkthrough Video:** 👉 **[https://andreyjackkali.github.io/blitz-vault/demo.mp4](https://andreyjackkali.github.io/blitz-vault/demo.mp4)** · **[`docs/demo.mp4`](https://github.com/AndreyJackKali/blitz-vault/raw/main/docs/demo.mp4)** · **[GitHub Release `v1.0.0-blitz-v10`](https://github.com/AndreyJackKali/blitz-vault/releases/tag/v1.0.0-blitz-v10)**
-- **100% GREEN CI Proof (14 Rust Tests + 326 KiB SBF `.so` + 10/10 Localnet BPF E2E + Live Devnet):** 👉 **[GitHub Actions Workflows](https://github.com/AndreyJackKali/blitz-vault/actions/workflows/ci-pages.yml)** · **[Solana Devnet Program `J22Smy…LfqU`](https://explorer.solana.com/address/J22SmyEnav4VNywHCBacqWbN5ZYGzJY5Xegiy54xLfqU?cluster=devnet)**
+- **Watch 69s Narrated HD Walkthrough Video:** 👉 **[https://andreyjackkali.github.io/blitz-vault/demo.mp4](https://andreyjackkali.github.io/blitz-vault/demo.mp4)** · **[`docs/demo.mp4`](https://github.com/AndreyJackKali/blitz-vault/raw/main/docs/demo.mp4)** · **[GitHub Release `v1.2.0`](https://github.com/AndreyJackKali/blitz-vault/releases/tag/v1.2.0)**
+- **100% GREEN CI Proof (22 Rust Tests + 326 KiB SBF `.so` + 10/10 Localnet BPF E2E + Live Devnet Verifier):** 👉 **[GitHub Actions Workflows](https://github.com/AndreyJackKali/blitz-vault/actions/workflows/ci-pages.yml)** · **[Solana Devnet Program `J22Smy…LfqU`](https://explorer.solana.com/address/J22SmyEnav4VNywHCBacqWbN5ZYGzJY5Xegiy54xLfqU?cluster=devnet)**
 
 [![BlitzVault Live Arena Preview](docs/preview.png)](https://andreyjackkali.github.io/blitz-vault/)
 
@@ -115,9 +115,10 @@ sequenceDiagram
 | **Live End-to-End Devnet + MagicBlock ER PoW** | ✅ 12 / 12 TXs Finalized (`err: null`) | Full lifecycle verified live: `initialize_arena` → `delegate_arena` → `start_round` + `callback_round_vrf` (`3,659 CU`, ~70ms, `0` fee) → `cashout_round` → `open_relic_pack` + `callback_relic_vrf` (`3,925 CU`, ~20ms, `0` fee, Common Relic minted) → `commit_arena` → `undelegate_arena` back to L1 |
 | **GitHub Actions CI (`ci-pages.yml`)** | ✅ 3 / 3 Jobs Green | [View live CI runs](https://github.com/AndreyJackKali/blitz-vault/actions/workflows/ci-pages.yml) — Rust Unit Tests + Solana SBF Build & Localnet E2E + GitHub Pages Deploy |
 | **Solana SBF ELF Binary (`blitz_vault.so`)** | ✅ Built in CI & Deployed | `333,656 bytes` (`326 KiB`) `ELF 64-bit LSB pie executable, eBPF` built via Agave `solana-cli 4.4.1` · SHA-256 `451dc64f62733abb431399a1912cc149c2d331b53bce55ca9b5182942119f826` |
-| **Extended Rust Unit & Invariant Suite** | ✅ 14 / 14 Passing | Crash curve bounds & 5k Monte Carlo distribution, VRF domain separation, Relic boost caps/overflow, payout solvency, Borsh `INIT_SPACE`, MagicBlock ER/VRF PDAs (`PROGRAM_IDENTITY` + `SCOPED_VRF_IDENTITY`) & instruction layouts |
+| **Extended Rust Unit & Invariant Suite** | ✅ 22 / 22 Passing | Crash curve bounds, 5k Monte Carlo crash + 10k Relic drop distribution, live Devnet VRF hash parity vector, VRF domain separation, Relic boost caps/overflow, payout monotonicity & dust solvency, full 148-byte Borsh roundtrip, MagicBlock ER/VRF PDAs (`PROGRAM_IDENTITY` + `SCOPED_VRF_IDENTITY`), stale VRF boundary safety |
+| **Live Devnet & Parity Verifier (`scripts/verify_devnet.mjs`)** | ✅ 10 / 10 Assertions | Zero-dependency verifier checking executable Devnet program, live 148-byte Borsh `ArenaState` PDA decode, finalized L1 signatures, Magic Router `getRoutes`, and exact Rust ↔ JS VRF math parity |
 | **Real `solana-test-validator` SBF E2E** | ✅ 10 / 10 On-Chain Assertions | Loads compiled `blitz_vault.so` into Solana BPF VM (`solana-core 4.4.1`), executes real `initialize_arena` (`~14k–20k CU`), verifies 148-byte `ArenaState` PDA, and proves 9 negative security guards (`already in use`, `ConstraintSeeds 0x7d6`, `RoundNotLive 0x1775`, `NoPendingVrf 0x1779`, `StakeTooLow 0x1772`, `InvalidOracleQueue 0x1777` on both `start_round` & `open_relic_pack`, `InsufficientChips 0x1773`, and spoofed non-oracle `callback_round_vrf` `ConstraintAddress 0x7dc`) |
-| **Live Interactive Web Arena** | ✅ Live HTTPS (`0` console errors) | [andreyjackkali.github.io/blitz-vault](https://andreyjackkali.github.io/blitz-vault/) — live `devnet-router.magicblock.app` validator selector, regional ER & Devnet L1 telemetry, `commit_arena` + `undelegate_arena`, and click-to-verify VRF proofs |
+| **Live Interactive Web Arena (`v1.2.0`)** | ✅ Live HTTPS (`0` console errors) | [andreyjackkali.github.io/blitz-vault](https://andreyjackkali.github.io/blitz-vault/) — 1-Click Judge Auto-Tour, live browser Devnet PDA & TX Inspector, Provably Fair VRF Hash Verifier, L1 vs. ER 100-round benchmark table, and live `devnet-router.magicblock.app` selector |
 
 ---
 

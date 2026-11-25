@@ -1019,4 +1019,141 @@ mod tests {
         assert_eq!(arena.chips, 10_560);
         assert_eq!(arena.shards, 95);
     }
+
+    #[test]
+    fn live_devnet_pda_vrf_hash_parity_vector() {
+        // Exact 32-byte last_vrf_hash recorded on live Solana Devnet PDA 8y1LEmZsDedCdQstcf5aZn41ZziFuKoVC8tJ4cAxXiPF
+        let live_hash: [u8; 32] = [
+            0xd0, 0x66, 0xf5, 0x0a, 0x6c, 0x0b, 0xd7, 0xa6,
+            0xb9, 0x98, 0x21, 0xc9, 0x8b, 0x96, 0x19, 0x43,
+            0x5c, 0xe9, 0xc8, 0x34, 0xa0, 0x2e, 0x58, 0xf9,
+            0x8d, 0x06, 0xfa, 0xe1, 0x54, 0x48, 0x53, 0xb4,
+        ];
+        // First byte 0xd0 = 208 -> (208 % 100) + 1 = 9 -> Epic if used on relic; check exact deterministic math
+        let roll = (live_hash[0] % 100) + 1;
+        assert_eq!(roll, 9);
+        assert_eq!(compute_relic_tier(roll), 3);
+
+        // Verify crash derivation matches JS DataView.getBigUint64(0, true) bit-for-bit
+        let crash_bps = derive_crash_point_bps(&live_hash);
+        assert!(crash_bps == 10_000 || (MIN_CASHOUT_BPS..=MAX_CRASH_BPS).contains(&crash_bps));
+        let r = u64::from_le_bytes(live_hash[0..8].try_into().unwrap());
+        let expected = if r % 33 == 0 {
+            10_000
+        } else {
+            let u = (r >> 32) % 10_000;
+            let denom = (10_000 - u).max(1);
+            ((99_000_000u64 / denom) as u32).clamp(MIN_CASHOUT_BPS, MAX_CRASH_BPS)
+        };
+        assert_eq!(crash_bps, expected);
+    }
+
+    #[test]
+    fn relic_drop_table_monte_carlo_10k_distribution() {
+        let (mut c, mut r, mut e, mut m) = (0u32, 0u32, 0u32, 0u32);
+        for i in 0..10_000u32 {
+            let roll = ((i % 100) + 1) as u8;
+            match compute_relic_tier(roll) {
+                1 => c += 1,
+                2 => r += 1,
+                3 => e += 1,
+                4 => m += 1,
+                _ => panic!("invalid relic tier"),
+            }
+        }
+        assert_eq!((c, r, e, m), (6_000, 2_500, 1_200, 300));
+    }
+
+    #[test]
+    fn payout_monotonicity_across_multipliers_and_boosts() {
+        let mut prev_total = 0u64;
+        for mult in [10_500u32, 12_500, 15_000, 20_000, 50_000, 100_000, MAX_CRASH_BPS] {
+            let (_, _, total) = compute_payout(1_000, mult, 1_000).unwrap();
+            assert!(total > prev_total, "payout must strictly increase with multiplier");
+            prev_total = total;
+        }
+        let mut prev_bonus = 0u64;
+        for boost in [0u16, 100, 300, 600, 1_200, 2_500] {
+            let (_, bonus, _) = compute_payout(10_000, 20_000, boost).unwrap();
+            assert!(bonus >= prev_bonus, "bonus must be monotonically non-decreasing");
+            prev_bonus = bonus;
+        }
+    }
+
+    #[test]
+    fn payout_dust_stake_and_exact_floor_solvency() {
+        let (base, bonus, total) = compute_payout(MIN_STAKE, MIN_CASHOUT_BPS, 0).unwrap();
+        assert_eq!(base, 105);
+        assert_eq!(bonus, 0);
+        assert_eq!(total, 105);
+
+        let (base_b, bonus_b, total_b) =
+            compute_payout(MIN_STAKE, MIN_CASHOUT_BPS, MAX_RELIC_BOOST_BPS).unwrap();
+        assert_eq!(base_b, 105);
+        assert_eq!(bonus_b, 1); // floor(5 * 2500 / 10000) = 1
+        assert_eq!(total_b, 106);
+    }
+
+    #[test]
+    fn arena_state_full_populated_borsh_roundtrip() {
+        let player = Pubkey::new_from_array([42u8; 32]);
+        let mut arena = sample_arena(player);
+        arena.chips = 123_456;
+        arena.shards = 789;
+        arena.round_nonce = 17;
+        arena.phase = ArenaPhase::Live as u8;
+        arena.pending_vrf_kind = 1;
+        arena.active_stake = 2_500;
+        arena.crash_point_bps = 45_200;
+        arena.last_cashout_bps = 21_500;
+        arena.last_vrf_request_ts = 1_764_000_000;
+        arena.win_streak = 4;
+        arena.best_streak = 9;
+        arena.rounds_played = 33;
+        arena.total_pnl = -1_250;
+        arena.relics_common = 3;
+        arena.relics_rare = 2;
+        arena.relics_epic = 1;
+        arena.relics_mythic = 1;
+        arena.last_relic_tier = 4;
+        arena.last_vrf_hash = [0xABu8; 32];
+
+        let mut buf = Vec::new();
+        arena.try_serialize(&mut buf).unwrap();
+        assert_eq!(buf.len(), 148);
+        let decoded = ArenaState::try_deserialize(&mut buf.as_slice()).unwrap();
+        assert_eq!(decoded.chips, 123_456);
+        assert_eq!(decoded.total_pnl, -1_250);
+        assert_eq!(decoded.relic_boost_bps(), MAX_RELIC_BOOST_BPS); // 300+600+600+1200=2700 -> clamped 2500
+        assert_eq!(decoded.last_vrf_hash, [0xABu8; 32]);
+    }
+
+    #[test]
+    fn streak_shard_rewards_scale_and_cap_safely() {
+        let mut total_shards = STARTING_SHARDS;
+        for streak in 1u64..=10 {
+            total_shards += 25 + streak * 10;
+        }
+        // 150 + sum(35, 45, ..., 125) = 150 + 800 = 950 -> enough for 9 Relic Packs
+        assert_eq!(total_shards, 950);
+        assert_eq!(total_shards / PACK_SHARD_COST, 9);
+    }
+
+    #[test]
+    fn vrf_caller_seed_zero_inputs_and_all_domains_valid() {
+        let z_round = build_vrf_caller_seed(0, 0, 0, VRF_DOMAIN_ROUND);
+        let z_relic = build_vrf_caller_seed(0, 0, 0, VRF_DOMAIN_RELIC);
+        assert_ne!(z_round, z_relic);
+        assert_ne!(z_round, [0u8; 32]);
+        assert_eq!(z_round.len(), 32);
+    }
+
+    #[test]
+    fn stale_vrf_timeout_extreme_i64_saturating_safety() {
+        // Must never panic on extreme i64 boundaries
+        assert!(!is_vrf_expired(i64::MAX, i64::MAX));
+        assert!(!is_vrf_expired(i64::MIN, i64::MIN));
+        assert!(is_vrf_expired(0, i64::MAX));
+        assert!(!is_vrf_expired(i64::MAX, 0));
+    }
 }

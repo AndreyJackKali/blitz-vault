@@ -25,10 +25,12 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
-      - name: Cargo check & 14 unit tests
+      - name: Cargo check & 22 unit tests
         run: |
           cargo check --manifest-path programs/blitz-vault/Cargo.toml
           cargo test --manifest-path programs/blitz-vault/Cargo.toml --lib -- --nocapture
+      - name: Rust<->JS VRF Parity & Offline Verifier
+        run: node scripts/verify_devnet.mjs --offline
 
   build-sbf-and-e2e:
     name: Build Solana SBF (.so) & Localnet E2E
