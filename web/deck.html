@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BlitzVault — Pitch Deck (Solana Blitz v10 · MagicBlock ER)</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%232e5bff'/%3E%3Cstop offset='1' stop-color='%2300ff94'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='url(%23g)'/%3E%3Ctext x='32' y='44' text-anchor='middle' font-family='sans-serif' font-weight='900' font-size='32' fill='%23050814'%3E%E2%9A%A1%3C/text%3E%3C/svg%3E" />
   <style>
     :root {
       --bg: #050811;
@@ -149,6 +150,7 @@
     </div>
     <div class="nav-links">
       <a class="primary" href="./">🎮 Live Arena</a>
+      <a href="./judge-brief.html">📋 Judge Brief</a>
       <a href="./demo.mp4">🎬 69s Narrated Demo</a>
       <a href="https://explorer.solana.com/address/J22SmyEnav4VNywHCBacqWbN5ZYGzJY5Xegiy54xLfqU?cluster=devnet" target="_blank" rel="noopener">🔍 Devnet Program</a>
       <a href="https://github.com/AndreyJackKali/blitz-vault" target="_blank" rel="noopener">📦 GitHub</a>
@@ -179,8 +181,8 @@
             <div class="kpi-lbl">Live Scoped VRF Oracle Callbacks on SGP ER (3,659–3,925 CU)</div>
           </div>
           <div class="card">
-            <div class="kpi purple">24 / 24</div>
-            <div class="kpi-lbl">14 Rust Unit Tests + 10 Real solana-test-validator SBF E2E Guards</div>
+            <div class="kpi purple">32 / 32</div>
+            <div class="kpi-lbl">22 Rust Unit Tests + 10 Real solana-test-validator SBF E2E Guards</div>
           </div>
         </div>
         <div class="pill-row">
@@ -191,7 +193,7 @@
         </div>
       </div>
       <div class="slide-foot">
-        <span>BlitzVault v1.1.0 · Solana Blitz v10: Entertainment Finance</span>
+        <span>BlitzVault v1.2.0 · Solana Blitz v10: Entertainment Finance</span>
         <span>Use ← / → or Space to navigate · Slide 1 / 8</span>
       </div>
     </section>
@@ -384,7 +386,7 @@
             </ul>
           </div>
           <div class="card">
-            <h3 class="cyan">14 / 14 Rust Unit &amp; Monte Carlo Invariants</h3>
+            <h3 class="cyan">22 / 22 Rust Unit &amp; Monte Carlo Invariants</h3>
             <ul>
               <li>5,000-sample Monte Carlo verification of crash curve heavy-tail distribution &amp; house edge bounds.</li>
               <li>Domain separation check: identical seeds in Round vs Relic produce independent VRF outputs.</li>
@@ -457,11 +459,11 @@
         <div class="code-box"># 1. Verify live executable Solana Devnet program
 solana program show J22SmyEnav4VNywHCBacqWbN5ZYGzJY5Xegiy54xLfqU --url https://api.devnet.solana.com
 
-# 2. Run all 14 Rust unit &amp; MagicBlock ER/VRF layout tests locally
+# 2. Run all 22 Rust unit &amp; MagicBlock ER/VRF layout tests locally
 cargo test --manifest-path programs/blitz-vault/Cargo.toml --lib -- --nocapture</div>
       </div>
       <div class="slide-foot">
-        <span>BlitzVault v1.1.0 · Built for Solana Blitz v10 (MagicBlock ER)</span>
+        <span>BlitzVault v1.2.0 · Built for Solana Blitz v10 (MagicBlock ER)</span>
         <span>Slide 8 / 8</span>
       </div>
     </section>

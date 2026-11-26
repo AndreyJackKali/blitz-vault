@@ -4,6 +4,7 @@
 [![Solana Devnet](https://img.shields.io/badge/Solana%20Devnet-LIVE%20J22Smy…LfqU-00ff94?style=flat-square&logo=solana)](https://explorer.solana.com/address/J22SmyEnav4VNywHCBacqWbN5ZYGzJY5Xegiy54xLfqU?cluster=devnet)
 [![CI SBF E2E](https://img.shields.io/badge/CI%20SBF%20E2E-10%2F10%20Passed-00ff94?style=flat-square&logo=githubactions)](https://github.com/AndreyJackKali/blitz-vault/actions/workflows/ci-pages.yml)
 [![Live Arena](https://img.shields.io/badge/Live%20Demo-GitHub%20Pages-00ff94?style=flat-square&logo=solana)](https://andreyjackkali.github.io/blitz-vault/)
+[![Judge Brief](https://img.shields.io/badge/1--Page%20Judge%20Brief-Live%20Card-00ff94?style=flat-square)](https://andreyjackkali.github.io/blitz-vault/judge-brief.html)
 [![Pitch Deck](https://img.shields.io/badge/Pitch%20Deck-8%20Slides%20Live-a855f7?style=flat-square)](https://andreyjackkali.github.io/blitz-vault/deck.html)
 [![Demo Video](https://img.shields.io/badge/Narrated%20Walkthrough-69s%20HD%20MP4-38bdf8?style=flat-square)](https://andreyjackkali.github.io/blitz-vault/demo.mp4)
 [![MagicBlock SDK](https://img.shields.io/badge/MagicBlock%20ER%20SDK-0.18.0-7c3aed?style=flat-square)](https://docs.magicblock.gg/)
@@ -21,6 +22,7 @@
 ## 🎬 Live Interactive Arena, 8-Slide Pitch Deck & 69s Narrated HD Walkthrough
 
 - **Play Live Now (`v1.2.0` · Zero Setup · Live Devnet PDA Inspector + VRF Verifier + 1-Click Judge Auto-Tour + Phantom Devnet):** 👉 **[https://andreyjackkali.github.io/blitz-vault/](https://andreyjackkali.github.io/blitz-vault/)**
+- **Open 1-Page Printable Judge Brief (60s Rubric + Clickable Explorer TXs + Video):** 👉 **[https://andreyjackkali.github.io/blitz-vault/judge-brief.html](https://andreyjackkali.github.io/blitz-vault/judge-brief.html)**
 - **Open 8-Slide Interactive Pitch Deck:** 👉 **[https://andreyjackkali.github.io/blitz-vault/deck.html](https://andreyjackkali.github.io/blitz-vault/deck.html)**
 - **Watch 69s Narrated HD Walkthrough Video:** 👉 **[https://andreyjackkali.github.io/blitz-vault/demo.mp4](https://andreyjackkali.github.io/blitz-vault/demo.mp4)** · **[`docs/demo.mp4`](https://github.com/AndreyJackKali/blitz-vault/raw/main/docs/demo.mp4)** · **[GitHub Release `v1.2.0`](https://github.com/AndreyJackKali/blitz-vault/releases/tag/v1.2.0)**
 - **100% GREEN CI Proof (22 Rust Tests + 326 KiB SBF `.so` + 10/10 Localnet BPF E2E + Live Devnet Verifier):** 👉 **[GitHub Actions Workflows](https://github.com/AndreyJackKali/blitz-vault/actions/workflows/ci-pages.yml)** · **[Solana Devnet Program `J22Smy…LfqU`](https://explorer.solana.com/address/J22SmyEnav4VNywHCBacqWbN5ZYGzJY5Xegiy54xLfqU?cluster=devnet)**
@@ -203,7 +205,7 @@ RPC: http://127.0.0.1:8899 Cluster version: {"feature-set":2681577653,"solana-co
 ## 🚀 1-Command Local Verification & Devnet Replay
 
 ```bash
-# 1. Run all 14 Rust unit & MagicBlock ER/VRF layout tests
+# 1. Run all 22 Rust unit & MagicBlock ER/VRF layout tests
 cargo test --manifest-path programs/blitz-vault/Cargo.toml --lib -- --nocapture
 
 # 2. Compile Solana SBF binary (target/deploy/blitz_vault.so, 326 KiB)
